@@ -188,15 +188,18 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             <button onclick="app.setTransactionType('expense')" id="btn-expense" class="flex-1 py-3 rounded-xl font-semibold transition-all bg-danger-500 text-white shadow-lg">Gasto</button>
             <button onclick="app.setTransactionType('income')" id="btn-income" class="flex-1 py-3 rounded-xl font-semibold transition-all bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Ingreso</button>
         </div>
+        <button type="button" onclick="app.startVoiceInput()" class="w-full py-4 mb-4 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center gap-2 text-slate-700 dark:text-slate-300 font-medium">
+            <svg class="w-6 h-6 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+            🎤 Dictar monto
+        </button>
         <form onsubmit="app.saveTransaction(event)" class="space-y-4">
-            <div><label class="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Monto</label><div class="relative"><span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">$</span><input type="number" id="t-amount" inputmode="numeric" class="input-field pl-10 text-2xl font-bold" placeholder="0" required autofocus></div></div>
+            <div><label class="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Monto</label><div class="relative"><span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">$</span><input type="number" id="t-amount" inputmode="numeric" class="input-field pl-10 text-2xl font-bold" placeholder="0" required></div></div>
             <div class="grid grid-cols-2 gap-3">
                 <div><label class="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Categoria</label><select id="t-category" class="input-field appearance-none" required></select></div>
                 <div><label class="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Fecha</label><input type="date" id="t-date" class="input-field" required></div>
             </div>
             <div><label class="block text-xs font-medium text-slate-500 mb-1 uppercase tracking-wider">Nota (opcional)</label><input type="text" id="t-note" class="input-field" placeholder="¿En qué gastaste?"><div id="suggestions" class="flex gap-2 mt-2 overflow-x-auto hide-scrollbar"></div></div>
             <div class="flex items-center gap-2 pt-2">
-                <button type="button" onclick="app.startVoiceInput()" class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shrink-0"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg></button>
                 <button type="submit" class="flex-1 py-4 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl shadow-lg transition-all active:scale-[0.98]">Guardar</button>
                 <button type="button" id="btn-delete-transaction" onclick="app.deleteCurrentTransaction()" class="hidden py-4 px-4 bg-danger-500 text-white rounded-xl font-bold shadow-lg">Eliminar</button>
             </div>
@@ -519,6 +522,36 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 return;
             }
 
+            const totalMovements = income + expense;
+            const incomePct = totalMovements > 0 ? Math.round((income / totalMovements) * 100) : 0;
+            const expensePct = totalMovements > 0 ? Math.round((expense / totalMovements) * 100) : 0;
+            const radius = 40;
+            const circumference = 2 * Math.PI * radius;
+            const incomeDash = (incomePct / 100) * circumference;
+            const expenseDash = (expensePct / 100) * circumference;
+
+            const pieChartHTML = totalMovements > 0 ? `
+            <div class="card flex flex-col items-center">
+                <p class="text-[10px] uppercase text-slate-500 font-bold mb-2">Distribución de movimientos</p>
+                <div class="relative w-32 h-32">
+                    <svg viewBox="0 0 100 100" class="transform -rotate-90 w-full h-full">
+                        <circle cx="50" cy="50" r="${radius}" fill="none" stroke="#22c55e" stroke-width="20"
+                            stroke-dasharray="${incomeDash} ${circumference - incomeDash}" />
+                        <circle cx="50" cy="50" r="${radius}" fill="none" stroke="#ef4444" stroke-width="20"
+                            stroke-dasharray="${expenseDash} ${circumference - expenseDash}"
+                            stroke-dashoffset="-${incomeDash}" />
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center">
+                        <span class="text-sm font-bold">${this.formatMoney(balance)}</span>
+                        <span class="text-[10px] text-slate-500">Saldo</span>
+                    </div>
+                </div>
+                <div class="flex gap-4 mt-2 text-sm">
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-brand-600 inline-block"></span> Ingresos ${incomePct}%</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-danger-500 inline-block"></span> Gastos ${expensePct}%</span>
+                </div>
+            </div>` : '';
+
             const expenseTx = periodTx.filter(t=>t.type==='expense');
             const expenseDays = new Set(expenseTx.map(t=>t.date)).size;
             const hasEnoughExpenseDays = expenseDays >= 3;
@@ -526,7 +559,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             container.innerHTML = `
             <div class="space-y-4 animate-fade-in">
                 ${this.data.customPeriod?`<div class="period-badge mb-1">Periodo: ${this.formatDate(this.data.customPeriod.start)} – ${this.formatDate(this.data.customPeriod.end)}</div>`:''}
-                ${userName ? `<p class="text-sm font-medium text-slate-500">Hola, ${escapeHtml(userName)}! Vamos a ordenar tu situación financiera ✨</p>` : ''}
+                ${userName ? `<p class="text-sm font-medium text-slate-500">Hola, ${escapeHtml(userName)}. Descubre todo lo que pasa con tu dinero, en un solo lugar ✨</p>` : ''}
                 <div class="card bg-slate-900 text-white">
                     <p class="text-[10px] uppercase text-slate-400">Saldo disponible</p>
                     <p class="text-3xl font-bold ${balance>=0?'':'text-red-400'}">${this.formatMoney(balance)}</p>
@@ -541,6 +574,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                         <p class="text-xl font-bold text-danger-700 dark:text-danger-300">${this.formatMoney(expense)}</p>
                     </div>
                 </div>
+                ${pieChartHTML}
                 <div class="card">
                     <div class="flex justify-between mb-3">
                         <h3 class="font-bold text-sm">Últimos movimientos</h3>
@@ -702,21 +736,12 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const item = this.data.futureItems.find(i => i.id === id);
             if (!item || item.paid) return;
             this.data.transactions.push({
-                id: this.generateId(),
-                type: item.type,
-                amount: item.amount,
-                category: item.category,
-                categoryName: item.categoryName || item.category,
-                date: new Date().toISOString().split('T')[0],
-                note: `Pagado: ${item.name}`,
-                source: 'future_payment',
-                createdAt: new Date().toISOString()
+                id: this.generateId(), type: item.type, amount: item.amount, category: item.category,
+                categoryName: item.categoryName || item.category, date: new Date().toISOString().split('T')[0],
+                note: `Pagado: ${item.name}`, source: 'future_payment', createdAt: new Date().toISOString()
             });
-            item.paid = true;
-            item.paidDate = new Date().toISOString().split('T')[0];
-            this.saveData();
-            this.showToast(`${item.type === 'income' ? 'Ingreso' : 'Gasto'} registrado`);
-            this.navigate('future');
+            item.paid = true; item.paidDate = new Date().toISOString().split('T')[0];
+            this.saveData(); this.showToast(`${item.type === 'income' ? 'Ingreso' : 'Gasto'} registrado`); this.navigate('future');
         },
         renderGoals(container){
             const goals = this.data.goals;
@@ -735,44 +760,129 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         clearExampleGoals(){ this.data.goals = this.data.goals.filter(g=> !String(g.id).startsWith('example_')); this.saveData(); this.navigate('goals'); },
         renderSettings(container){
             const userName = this.data.user.name || '';
-            container.innerHTML = `<div class="space-y-6 animate-fade-in pb-8">
+            const transactionCount = this.data.transactions.length;
+            const futureCount = this.data.futureItems.length;
+            const goalsCount = this.data.goals.length;
+            
+            container.innerHTML = `
+            <div class="space-y-6 animate-fade-in pb-8">
+                <!-- Perfil -->
                 <div class="card">
-                    <h3 class="font-bold mb-2">FinTrack Pro (Prototipo)</h3>
+                    <div class="flex items-center gap-4 mb-2">
+                        <div class="w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-xl font-bold text-brand-600">
+                            ${userName ? escapeHtml(userName.charAt(0).toUpperCase()) : '👤'}
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-lg">${userName ? escapeHtml(userName) : 'Tu perfil'}</h3>
+                            <p class="text-xs text-slate-500">Plan Pro · Todas las funciones activas</p>
+                        </div>
+                    </div>
                     <div class="flex gap-2 mt-3">
                         <input type="text" id="settings-name" class="input-field flex-1" placeholder="Tu nombre" value="${escapeHtml(userName)}">
-                        <button onclick="app.saveUserName()" class="px-4 py-2 bg-brand-600 text-white rounded-xl">Guardar nombre</button>
+                        <button onclick="app.saveUserName()" class="px-4 py-2 bg-brand-600 text-white rounded-xl font-medium">Guardar</button>
                     </div>
                 </div>
-                <div class="card"><h3 class="font-bold text-sm uppercase text-slate-500 tracking-wider mb-3">Categorías</h3><button onclick="app.openModal('categories')" class="w-full py-3 bg-slate-100 dark:bg-slate-800 rounded-xl">Gestionar categorías</button></div>
-                <div class="card"><h3 class="font-bold text-sm uppercase text-slate-500 tracking-wider mb-3">Exportación</h3><button onclick="app.exportCSV()" class="w-full p-4 flex justify-between border-b"><span>Exportar CSV</span><svg class="w-5 h-5"/></button><button onclick="app.exportPDF()" class="w-full p-4 flex justify-between"><span>Exportar PDF</span><svg class="w-5 h-5"/></button></div>
-                <div class="card"><button onclick="app.requestClearAllData()" class="w-full p-4 text-danger-600">Borrar todos los datos</button></div>
-                <div class="text-center text-xs text-slate-400 pt-4">FinTrack v2.1 · Prototipo</div>
+
+                <!-- Estadísticas rápidas -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="card text-center py-3">
+                        <p class="text-2xl font-bold text-brand-600">${transactionCount}</p>
+                        <p class="text-[10px] uppercase text-slate-500">Transacciones</p>
+                    </div>
+                    <div class="card text-center py-3">
+                        <p class="text-2xl font-bold text-pro-600">${futureCount}</p>
+                        <p class="text-[10px] uppercase text-slate-500">Futuros</p>
+                    </div>
+                    <div class="card text-center py-3">
+                        <p class="text-2xl font-bold text-brand-600">${goalsCount}</p>
+                        <p class="text-[10px] uppercase text-slate-500">Metas</p>
+                    </div>
+                </div>
+
+                <!-- Categorías -->
+                <div class="card">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="text-lg">📂</span>
+                        <h3 class="font-bold text-sm uppercase text-slate-500 tracking-wider">Categorías</h3>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3">Personaliza las categorías de tus gastos e ingresos.</p>
+                    <button onclick="app.openModal('categories')" class="w-full py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-medium">Gestionar categorías</button>
+                </div>
+
+                <!-- Exportación -->
+                <div class="card">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="text-lg">📤</span>
+                        <h3 class="font-bold text-sm uppercase text-slate-500 tracking-wider">Exportación</h3>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3">Descarga tus datos en formato CSV o un informe completo en PDF.</p>
+                    <button onclick="app.exportCSV()" class="w-full p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">📊</span>
+                            <div class="text-left">
+                                <p class="font-medium text-sm">Exportar CSV</p>
+                                <p class="text-xs text-slate-500">Hoja de cálculo con todas las transacciones</p>
+                            </div>
+                        </div>
+                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    </button>
+                    <button onclick="app.exportPDF()" class="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">📄</span>
+                            <div class="text-left">
+                                <p class="font-medium text-sm">Exportar PDF</p>
+                                <p class="text-xs text-slate-500">Informe financiero completo del período</p>
+                            </div>
+                        </div>
+                        <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Datos -->
+                <div class="card">
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="text-lg">🗑️</span>
+                        <h3 class="font-bold text-sm uppercase text-slate-500 tracking-wider">Datos</h3>
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3">Elimina toda tu información. Esta acción no se puede deshacer.</p>
+                    <button onclick="app.requestClearAllData()" class="w-full py-3 bg-danger-50 dark:bg-danger-900/20 text-danger-600 rounded-xl font-medium">Borrar todos los datos</button>
+                </div>
+
+                <!-- Disclaimer -->
+                <div class="card bg-slate-50 dark:bg-slate-800 border-dashed">
+                    <div class="flex items-start gap-3">
+                        <span class="text-lg mt-0.5">ℹ️</span>
+                        <div>
+                            <p class="text-xs text-slate-500 leading-relaxed">
+                                <strong>FinTrack</strong> es una herramienta diseñada para ayudarte a entender y gestionar mejor lo que haces con tu dinero.
+                            </p>
+                            <p class="text-xs text-slate-500 leading-relaxed mt-2">
+                                No somos un asesor financiero. Toda la información mostrada es referencial y no constituye una recomendación profesional.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center text-xs text-slate-400 pt-2">FinTrack v2.1 · Hecho con ❤️</div>
             </div>`;
         },
         saveUserName(){
             const input = document.getElementById('settings-name');
-            if(input){
-                this.data.user.name = input.value.trim();
-                this.saveData();
-                this.showToast('Nombre guardado');
-            }
+            if(input){ this.data.user.name = input.value.trim(); this.saveData(); this.showToast('Nombre guardado'); }
         },
 
         showConfirmModal(title, message, requiresInput=false, actionCallback){
             document.getElementById('confirm-title').textContent = title;
             document.getElementById('confirm-message').textContent = message;
             const input = document.getElementById('confirm-input');
-            if(requiresInput){ input.classList.remove('hidden'); input.value = ''; }
-            else { input.classList.add('hidden'); }
-            pendingConfirmAction = actionCallback;
-            this.openModal('confirm');
+            if(requiresInput){ input.classList.remove('hidden'); input.value = ''; } else { input.classList.add('hidden'); }
+            pendingConfirmAction = actionCallback; this.openModal('confirm');
         },
         confirmAction(){
             const input = document.getElementById('confirm-input');
             if(!input.classList.contains('hidden') && input.value !== 'BORRAR'){ this.showToast('Escribe BORRAR para confirmar'); return; }
             if(pendingConfirmAction) pendingConfirmAction();
-            this.closeModal('confirm');
-            pendingConfirmAction = null;
+            this.closeModal('confirm'); pendingConfirmAction = null;
         },
 
         openModal(type){
@@ -784,7 +894,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 document.getElementById('t-date').value = (today >= r.start && today <= r.end) ? today : r.end;
                 this.populateCategories(); this.updateSuggestions(); document.getElementById('btn-delete-transaction').classList.add('hidden');
                 document.getElementById('modal-transaction').classList.add('active');
-                setTimeout(()=>document.getElementById('t-amount').focus(),100);
             }else if(type==='express'){
                 document.getElementById('express-input').value=''; document.getElementById('express-preview').classList.add('hidden');
                 document.getElementById('modal-express').classList.add('active'); setTimeout(()=>document.getElementById('express-input').focus(),100);
@@ -799,8 +908,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             }else if(type==='goal'){
                 document.getElementById('goal-modal-title').textContent='Nueva Meta'; document.getElementById('g-id').value='';
                 document.getElementById('g-name').value=''; document.getElementById('g-target').value=''; document.getElementById('g-date').value='';
-                document.getElementById('btn-save-goal').textContent='Crear Meta';
-                document.getElementById('modal-goal').classList.add('active');
+                document.getElementById('btn-save-goal').textContent='Crear Meta'; document.getElementById('modal-goal').classList.add('active');
             }else if(type==='month'){ this.openMonthPicker(); }
             else if(type==='categories'){ this.renderCategoriesList(); document.getElementById('modal-categories').classList.add('active'); }
             else if(type==='confirm'){ document.getElementById('modal-confirm').classList.add('active'); }
@@ -811,19 +919,16 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const exp=document.getElementById('btn-expense'), inc=document.getElementById('btn-income'), note=document.getElementById('t-note');
             if(this.data.txType==='expense'){
                 exp.className='flex-1 py-3 rounded-xl font-semibold bg-danger-500 text-white shadow-lg';
-                inc.className='flex-1 py-3 rounded-xl font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
-                note.placeholder='¿En qué gastaste?';
+                inc.className='flex-1 py-3 rounded-xl font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'; note.placeholder='¿En qué gastaste?';
             }else{
                 exp.className='flex-1 py-3 rounded-xl font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400';
-                inc.className='flex-1 py-3 rounded-xl font-semibold bg-brand-600 text-white shadow-lg';
-                note.placeholder='¿De dónde proviene?';
+                inc.className='flex-1 py-3 rounded-xl font-semibold bg-brand-600 text-white shadow-lg'; note.placeholder='¿De dónde proviene?';
             }
         },
         populateCategories(){
             const sel=document.getElementById('t-category');
             let cats=this.data.categories.filter(c=>(this.data.txType==='expense'&&c.type==='expense')||(this.data.txType==='income'&&c.type==='income'));
-            cats = this.sortCategoriesByUsage(cats);
-            sel.innerHTML = cats.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+            cats = this.sortCategoriesByUsage(cats); sel.innerHTML = cats.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
         },
         populateFutureCategories(){
             const sel=document.getElementById('f-category');
@@ -849,21 +954,15 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const catObj=this.data.categories.find(c=>c.id===cat);
             if(this.data.editingId){
                 const idx = this.data.transactions.findIndex(t=>t.id===this.data.editingId);
-                if(idx!==-1){
-                    const original = this.data.transactions[idx];
-                    this.data.transactions[idx] = { ...original, type: this.data.txType, amount: amt, category: cat, categoryName: catObj?.name||cat, date, note, updatedAt: new Date().toISOString() };
-                }
-            } else {
-                this.data.transactions.push({ id: this.generateId(), type: this.data.txType, amount: amt, category: cat, categoryName: catObj?.name||cat, date, note, source: 'manual', createdAt: new Date().toISOString() });
-            }
+                if(idx!==-1){ const original = this.data.transactions[idx]; this.data.transactions[idx] = { ...original, type: this.data.txType, amount: amt, category: cat, categoryName: catObj?.name||cat, date, note, updatedAt: new Date().toISOString() }; }
+            } else { this.data.transactions.push({ id: this.generateId(), type: this.data.txType, amount: amt, category: cat, categoryName: catObj?.name||cat, date, note, source: 'manual', createdAt: new Date().toISOString() }); }
             this.saveData(); this.closeModal('transaction'); this.showToast(this.data.editingId?'Actualizado':'Guardado'); this.data.editingId=null; this.navigate(this.data.currentPage);
         },
         editTransaction(id){
             const t=this.data.transactions.find(x=>x.id===id); if(!t) return;
             this.openModal('transaction'); this.data.editingId=id; this.data.txType=t.type; this.updateTxTypeUI();
             document.getElementById('t-amount').value=t.amount; document.getElementById('t-date').value=t.date; document.getElementById('t-note').value=t.note||'';
-            this.populateCategories(); document.getElementById('t-category').value=t.category;
-            document.getElementById('btn-delete-transaction').classList.remove('hidden');
+            this.populateCategories(); document.getElementById('t-category').value=t.category; document.getElementById('btn-delete-transaction').classList.remove('hidden');
         },
         deleteCurrentTransaction(){
             if(!this.data.editingId) return;
@@ -881,8 +980,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             this.longPressTriggered = false;
         },
         updateExpressPreview(val){
-            const preview=document.getElementById('express-preview');
-            if(!val) { preview.classList.add('hidden'); return; }
+            const preview=document.getElementById('express-preview'); if(!val) { preview.classList.add('hidden'); return; }
             const cleaned = val.replace(/\./g, '').replace(/,/g, '.');
             const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
             if(!match) { preview.textContent='Formato: monto categoría'; preview.classList.remove('hidden'); return; }
@@ -890,14 +988,12 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             if(isNaN(amt)) { preview.textContent='Monto no válido'; preview.classList.remove('hidden'); return; }
             let type='expense'; if(/sueldo|salario|ingreso|cobro/i.test(rest)) type='income';
             let cat='Otros'; for(const c of this.data.categories) { if(rest.toLowerCase().includes(c.name.toLowerCase())) { cat=c.name; break; } }
-            preview.innerHTML = `${type==='income'?'➕ Ingreso':'🔻 Gasto'} de <strong>${this.formatMoney(amt)}</strong> en <strong>${cat}</strong> ${rest?`(${rest})`:''}`;
-            preview.classList.remove('hidden');
+            preview.innerHTML = `${type==='income'?'➕ Ingreso':'🔻 Gasto'} de <strong>${this.formatMoney(amt)}</strong> en <strong>${cat}</strong> ${rest?`(${rest})`:''}`; preview.classList.remove('hidden');
         },
         saveExpress(e){
             e.preventDefault(); const input=document.getElementById('express-input').value.trim(); if(!input) return;
             const cleaned = input.replace(/\./g, '').replace(/,/g, '.');
-            const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
-            if(!match) return this.showToast('Formato inválido');
+            const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(.*)$/); if(!match) return this.showToast('Formato inválido');
             const amt = parseFloat(match[1]); const rest = match[2].trim();
             if(!amt||isNaN(amt)||amt<=0) return this.showToast('Monto inválido');
             let type='expense'; if(/sueldo|salario|ingreso|cobro/i.test(rest)) type='income';
@@ -908,26 +1004,42 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         },
         startLongPress(e){ 
             if(e.type==='mousedown'&&e.button!==0) return; 
-            this.longPressTriggered=false; 
-            document.getElementById('fab-ring').classList.add('active'); 
+            this.longPressTriggered=false; document.getElementById('fab-ring').classList.add('active'); 
             this.data.longPressTimer=setTimeout(()=>{ 
-                this.longPressTriggered=true; 
-                document.getElementById('fab-ring').classList.remove('active'); 
-                this.closeModal('transaction'); 
-                this.openModal('express'); 
-                if(navigator.vibrate) navigator.vibrate(50); 
+                this.longPressTriggered=true; document.getElementById('fab-ring').classList.remove('active'); 
+                this.closeModal('transaction'); this.openModal('express'); if(navigator.vibrate) navigator.vibrate(50); 
             },700); 
         },
         endLongPress(){ document.getElementById('fab-ring').classList.remove('active'); clearTimeout(this.data.longPressTimer); },
         cancelLongPress(){ this.endLongPress(); },
         startVoiceInput(){
             if(!this.speechRecognition) return this.showToast('Voz no soportada');
-            const rec=new this.speechRecognition(); rec.lang='es-CL'; rec.interimResults=true; rec.maxAlternatives=1;
-            const fb=document.getElementById('voice-feedback'), st=document.getElementById('voice-status'), int=document.getElementById('voice-interim');
-            fb.classList.add('active'); st.textContent='Escuchando...'; int.textContent='';
-            rec.onresult=e=>{ let interim='', final=''; for(let i=e.resultIndex;i<e.results.length;i++){ const t=e.results[i][0].transcript; e.results[i].isFinal? final+=t : interim+=t; } int.textContent=interim; if(final){ fb.classList.remove('active'); this.parseVoiceInput(final.toLowerCase()); } };
-            rec.onerror=()=>{ fb.classList.remove('active'); this.showToast('Error al escuchar. Intenta de nuevo.'); };
-            rec.onend=()=>fb.classList.remove('active');
+            const modal = document.getElementById('modal-transaction');
+            if(!modal.classList.contains('active')) {
+                this.openModal('transaction');
+                setTimeout(() => this._startRecognition(), 300);
+            } else {
+                this._startRecognition();
+            }
+        },
+        _startRecognition(){
+            const rec = new this.speechRecognition();
+            rec.lang = 'es-CL';
+            rec.interimResults = true;
+            rec.maxAlternatives = 1;
+            const fb = document.getElementById('voice-feedback'), st = document.getElementById('voice-status'), int = document.getElementById('voice-interim');
+            fb.classList.add('active'); st.textContent = 'Escuchando...'; int.textContent = '';
+            rec.onresult = e => {
+                let interim = '', final = '';
+                for(let i = e.resultIndex; i < e.results.length; i++){
+                    const t = e.results[i][0].transcript;
+                    e.results[i].isFinal ? final += t : interim += t;
+                }
+                int.textContent = interim;
+                if(final){ fb.classList.remove('active'); this.parseVoiceInput(final.toLowerCase()); }
+            };
+            rec.onerror = () => { fb.classList.remove('active'); this.showToast('Error al escuchar. Intenta de nuevo.'); };
+            rec.onend = () => { fb.classList.remove('active'); };
             rec.start();
         },
         parseVoiceInput(txt){
@@ -953,10 +1065,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             if(!name||!amt||amt<=0||!date) return this.showToast('Completa los campos');
             const cat=this.data.categories.find(c=>c.id===catId);
             const existing = id ? this.data.futureItems.find(i => i.id === id) : null;
-            if(id && existing){ 
-                const idx = this.data.futureItems.findIndex(i=>i.id===id); 
-                if(idx!==-1) this.data.futureItems[idx] = { ...existing, type: this.data.futureType, name, amount: amt, date, category: catId, categoryName: cat?.name||catId, recurrent: rec, updatedAt: new Date().toISOString() }; 
-            }
+            if(id && existing){ const idx = this.data.futureItems.findIndex(i=>i.id===id); if(idx!==-1) this.data.futureItems[idx] = { ...existing, type: this.data.futureType, name, amount: amt, date, category: catId, categoryName: cat?.name||catId, recurrent: rec, updatedAt: new Date().toISOString() }; }
             else { this.data.futureItems.push({ id: this.generateId(), type: this.data.futureType, name, amount: amt, date, category: catId, categoryName: cat?.name||catId, recurrent: rec, createdAt: new Date().toISOString(), paid: false }); }
             this.saveData(); this.closeModal('future'); this.showToast(id?'Actualizado':'Guardado'); this.navigate('future');
         },
@@ -966,15 +1075,11 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             document.getElementById('f-id').value=i.id; this.data.futureType=i.type; this.updateFutureTypeUI();
             document.getElementById('f-name').value=i.name; document.getElementById('f-amount').value=i.amount;
             document.getElementById('f-date').value=i.date; document.getElementById('f-recurrent').checked=i.recurrent||false;
-            this.populateFutureCategories(); document.getElementById('f-category').value=i.category;
-            document.getElementById('btn-delete-future').classList.remove('hidden');
+            this.populateFutureCategories(); document.getElementById('f-category').value=i.category; document.getElementById('btn-delete-future').classList.remove('hidden');
         },
         deleteFutureItem(id){
             if(!id) return;
-            this.showConfirmModal('Eliminar item futuro', '¿Seguro?', false, ()=>{
-                this.data.futureItems=this.data.futureItems.filter(i=>i.id!==id);
-                this.saveData(); this.showToast('Eliminado'); this.navigate('future');
-            });
+            this.showConfirmModal('Eliminar item futuro', '¿Seguro?', false, ()=>{ this.data.futureItems=this.data.futureItems.filter(i=>i.id!==id); this.saveData(); this.showToast('Eliminado'); this.navigate('future'); });
         },
         saveGoal(e){
             e.preventDefault();
@@ -990,53 +1095,25 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             document.getElementById('g-date').value=g.targetDate||''; document.getElementById('btn-save-goal').textContent='Actualizar Meta';
         },
         addContribution(gid){
-            const safeId = String(gid).replace(/[^a-zA-Z0-9-_]/g, '');
-            const inp = document.getElementById('g-contrib-'+safeId);
-            if(!inp) return this.showToast('Error: input no encontrado');
-            const amt = parseFloat(inp.value);
+            const safeId = String(gid).replace(/[^a-zA-Z0-9-_]/g, ''); const inp = document.getElementById('g-contrib-'+safeId);
+            if(!inp) return this.showToast('Error: input no encontrado'); const amt = parseFloat(inp.value);
             if(!amt||amt<=0) return this.showToast('Monto inválido');
             const g = this.data.goals.find(x=>x.id===gid);
             if(g){ 
                 const saved = g.contributions?.reduce((s,c)=>s+c.amount,0)||0;
-                if(saved + amt > g.targetAmount) {
-                    this.showToast(`No puedes aportar más del objetivo. Máximo: ${this.formatMoney(g.targetAmount - saved)}`);
-                    return;
-                }
-                // Crear transacción de gasto automáticamente
-                this.data.transactions.push({
-                    id: this.generateId(),
-                    type: 'expense',
-                    amount: amt,
-                    category: 'other',
-                    categoryName: 'Aporte a meta',
-                    date: new Date().toISOString().split('T')[0],
-                    note: `Aporte: ${g.name}`,
-                    source: 'goal_contribution',
-                    createdAt: new Date().toISOString()
-                });
-                g.contributions = g.contributions || [];
-                g.contributions.push({date: new Date().toISOString().split('T')[0], amount: amt});
-                this.saveData();
-                this.showToast('Aporte registrado');
-                this.navigate('goals');
-            } else {
-                this.showToast('Meta no encontrada');
-            }
+                if(saved + amt > g.targetAmount) { this.showToast(`No puedes aportar más del objetivo. Máximo: ${this.formatMoney(g.targetAmount - saved)}`); return; }
+                this.data.transactions.push({ id: this.generateId(), type: 'expense', amount: amt, category: 'other', categoryName: 'Aporte a meta', date: new Date().toISOString().split('T')[0], note: `Aporte: ${g.name}`, source: 'goal_contribution', createdAt: new Date().toISOString() });
+                g.contributions = g.contributions || []; g.contributions.push({date: new Date().toISOString().split('T')[0], amount: amt});
+                this.saveData(); this.showToast('Aporte registrado'); this.navigate('goals');
+            } else { this.showToast('Meta no encontrada'); }
         },
         deleteGoal(id){
-            this.showConfirmModal('Eliminar meta', '¿Eliminar esta meta permanentemente?', false, ()=>{
-                this.data.goals=this.data.goals.filter(g=>g.id!==id);
-                this.saveData(); this.showToast('Meta eliminada'); this.navigate('goals');
-            });
+            this.showConfirmModal('Eliminar meta', '¿Eliminar esta meta permanentemente?', false, ()=>{ this.data.goals=this.data.goals.filter(g=>g.id!==id); this.saveData(); this.showToast('Meta eliminada'); this.navigate('goals'); });
         },
 
         renderCategoriesList(){
             const cont = document.getElementById('categories-list');
-            cont.innerHTML = this.data.categories.map(c=>`
-                <div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg mb-2">
-                    <div class="flex items-center gap-2"><span class="text-sm font-medium">${escapeHtml(c.name)}</span><span class="text-xs px-2 py-0.5 rounded-full ${c.type==='income'?'bg-brand-100 text-brand-600':'bg-danger-100 text-danger-600'}">${c.type==='income'?'Ingreso':'Gasto'}</span></div>
-                    <div class="flex gap-2"><button onclick="app.editCategory('${c.id}')" class="text-slate-500">✏️</button><button onclick="app.requestDeleteCategory('${c.id}')" class="text-danger-500">🗑️</button></div>
-                </div>`).join('');
+            cont.innerHTML = this.data.categories.map(c=>`<div class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg mb-2"><div class="flex items-center gap-2"><span class="text-sm font-medium">${escapeHtml(c.name)}</span><span class="text-xs px-2 py-0.5 rounded-full ${c.type==='income'?'bg-brand-100 text-brand-600':'bg-danger-100 text-danger-600'}">${c.type==='income'?'Ingreso':'Gasto'}</span></div><div class="flex gap-2"><button onclick="app.editCategory('${c.id}')" class="text-slate-500">✏️</button><button onclick="app.requestDeleteCategory('${c.id}')" class="text-danger-500">🗑️</button></div></div>`).join('');
         },
         addCategory(e){
             e.preventDefault(); const name = document.getElementById('new-cat-name').value.trim(), type = document.getElementById('new-cat-type').value;
@@ -1044,10 +1121,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const id = name.toLowerCase().replace(/\s+/g,'_'); this.data.categories.push({ id, name, type, favorite:false });
             this.saveData(); this.showToast('Categoría agregada'); this.renderCategoriesList(); document.getElementById('new-cat-name').value = '';
         },
-        editCategory(id){
-            const cat = this.data.categories.find(c=>c.id===id); if(!cat) return;
-            const newName = prompt('Nuevo nombre', cat.name); if(newName && newName.trim()) { cat.name = newName.trim(); this.saveData(); this.renderCategoriesList(); this.showToast('Categoría actualizada'); }
-        },
+        editCategory(id){ const cat = this.data.categories.find(c=>c.id===id); if(!cat) return; const newName = prompt('Nuevo nombre', cat.name); if(newName && newName.trim()) { cat.name = newName.trim(); this.saveData(); this.renderCategoriesList(); this.showToast('Categoría actualizada'); } },
         requestDeleteCategory(id){
             this.showConfirmModal('Eliminar categoría', 'Las transacciones asociadas se moverán a "Otros".', false, ()=>{
                 this.data.categories = this.data.categories.filter(c=>c.id!==id);
@@ -1076,17 +1150,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 doc.text(`Generado el ${new Date().toLocaleDateString('es-CL', {day:'numeric', month:'long', year:'numeric'})}`, 15, 62);
                 doc.setDrawColor(200, 200, 200); doc.line(15, 68, pageWidth-15, 68);
                 doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]); doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.text('Resumen Ejecutivo', 15, 82);
-                const kpis = [
-                    { label: 'Saldo actual', value: this.formatMoney(metrics.balance), color: metrics.balance>=0?primaryColor:[239,68,68] },
-                    { label: 'Proyeccion', value: this.formatMoney(metrics.projected), color: metrics.projected>=0?primaryColor:[239,68,68] },
-                    { label: 'Dias de reserva', value: metrics.hasExpenseHistory?`${metrics.coverage} dias`:'N/A', color: primaryColor },
-                    { label: 'Ritmo mensual', value: metrics.hasExpenseHistory?this.formatMoney(metrics.monthlyPace):'N/A', color: primaryColor },
-                    { label: 'Promedio diario', value: metrics.hasExpenseHistory?this.formatMoney(metrics.dailyAvg):'N/A', color: primaryColor }
-                ];
+                const kpis = [ { label: 'Saldo actual', value: this.formatMoney(metrics.balance), color: metrics.balance>=0?primaryColor:[239,68,68] }, { label: 'Proyeccion', value: this.formatMoney(metrics.projected), color: metrics.projected>=0?primaryColor:[239,68,68] }, { label: 'Dias de reserva', value: metrics.hasExpenseHistory?`${metrics.coverage} dias`:'N/A', color: primaryColor }, { label: 'Ritmo mensual', value: metrics.hasExpenseHistory?this.formatMoney(metrics.monthlyPace):'N/A', color: primaryColor }, { label: 'Promedio diario', value: metrics.hasExpenseHistory?this.formatMoney(metrics.dailyAvg):'N/A', color: primaryColor } ];
                 let yPos = 92;
                 kpis.forEach((kpi, i) => { const col = i % 2; const x = 15 + col * 95; if (col === 0 && i > 0) yPos += 25; doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]); doc.rect(x, yPos, 85, 20, 'F'); doc.setTextColor(100, 116, 139); doc.setFontSize(8); doc.text(kpi.label, x+5, yPos+8); doc.setTextColor(kpi.color[0], kpi.color[1], kpi.color[2]); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text(kpi.value, x+5, yPos+16); });
-                yPos += 30;
-                const hasAutoTable = typeof doc.autoTable === 'function';
+                yPos += 30; const hasAutoTable = typeof doc.autoTable === 'function';
                 if (Object.keys(metrics.catMap).length > 0) { doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]); doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.text('Gastos por Categoria', 15, yPos); yPos += 8; const catData = Object.entries(metrics.catMap).map(([name, amount]) => { const pct = ((amount / metrics.monthlySpent) * 100).toFixed(1); return [name, this.formatMoney(amount), `${pct}%`]; }); if (hasAutoTable) { doc.autoTable({ startY: yPos, head: [['Categoria', 'Monto', '%']], body: catData, theme: 'striped', headStyles: { fillColor: primaryColor, textColor: 255 }, margin: { left: 15, right: 15 } }); yPos = doc.lastAutoTable.finalY + 10; } }
                 const periodTx = this.getTransactionsForPeriod();
                 if (periodTx.length > 0) { doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]); doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.text('Historial de Movimientos', 15, yPos); yPos += 8; const historyData = periodTx.map(t => [ this.formatDate(t.date), t.categoryName || t.category, t.type === 'income' ? 'Ingreso' : 'Gasto', this.formatMoney(t.amount), t.note || '' ]); if (hasAutoTable) { doc.autoTable({ startY: yPos, head: [['Fecha', 'Categoria', 'Tipo', 'Monto', 'Nota']], body: historyData, theme: 'striped', headStyles: { fillColor: primaryColor, textColor: 255 }, margin: { left: 15, right: 15 } }); yPos = doc.lastAutoTable.finalY + 10; } }
