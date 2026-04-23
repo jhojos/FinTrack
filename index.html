@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0f172a">
-<title>FinTrack · Prototipo Completo</title>
+<title>FinTrack · Control Financiero Personal</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
 tailwind.config = {
@@ -65,11 +65,9 @@ select.input-field option { background: white; color: #1e293b; }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; }
 .dark .card { background: #1e293b; border-color: #334155; }
-/* Fix hover contrast */
 .hover\:bg-slate-50:hover { background-color: #f8fafc; }
 .dark .hover\:bg-slate-50:hover { background-color: #1e293b; }
-.dark .hover\:bg-slate-700\/50:hover { background-color: rgba(51, 65, 85, 0.5); }
-/* Card backgrounds for categories */
+.dark .hover\:bg-slate-800:hover { background-color: #1e293b; }
 .bg-brand-50 { background-color: #f0fdf4; }
 .dark .bg-brand-50 { background-color: rgba(34, 197, 94, 0.1); }
 .bg-danger-50 { background-color: #fef2f2; }
@@ -102,10 +100,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .dark .express-preview { background: #1e293b; }
 .sticky-summary { position: sticky; top: 0; z-index: 5; background: white; padding: 8px 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 8px; }
 .dark .sticky-summary { background: #0f172a; border-color: #334155; }
-.btn-primary { background-color: #16a34a; color: white; }
-.dark .btn-primary { background-color: #22c55e; color: white; }
-.btn-secondary { background-color: #e2e8f0; color: #1e293b; }
-.dark .btn-secondary { background-color: #334155; color: #e2e8f0; }
 </style>
 </head>
 <body class="bg-gray-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
@@ -488,10 +482,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         getFutureItemsForPeriod(){
             return this.data.futureItems.sort((a,b)=>new Date(a.date)-new Date(b.date));
         },
-        getGoalsForPeriod(){
-            const r = this.getCurrentPeriodRange();
-            return this.data.goals.filter(g=>!g.targetDate || (g.targetDate >= r.start && g.targetDate <= r.end));
-        },
 
         getCategoryUsageCounts() {
             const counts = {};
@@ -627,13 +617,13 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             container.innerHTML = `<div class="space-y-4 animate-fade-in">
                 <div class="grid grid-cols-2 gap-3"><div class="card bg-brand-50"><p class="text-xs text-brand-600 uppercase">Ingresos Futuros</p><p class="text-xl font-bold">${this.formatMoney(metrics.futureIncome)}</p></div><div class="card bg-danger-50"><p class="text-xs text-danger-600 uppercase">Gastos Futuros</p><p class="text-xl font-bold">${this.formatMoney(metrics.futureExpense)}</p></div></div>
                 <button onclick="app.openModal('future')" class="w-full py-3 bg-slate-900 text-white rounded-xl font-semibold flex items-center justify-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>Agregar compromiso</button>
-                ${items.length===0?'<div class="text-center py-12 text-slate-500"><p>No hay items futuros en este periodo</p></div>':`<div class="card !p-0 overflow-hidden">${items.map(i=>`<div class="flex items-center justify-between p-4 border-b border-slate-100 last:border-0"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full ${i.type==='income'?'bg-brand-100 text-brand-600':'bg-danger-100 text-danger-600'} flex items-center justify-center font-bold">${i.type==='income'?'+':'-'}</div><div><p class="font-medium">${escapeHtml(i.name)}</p><p class="text-xs text-slate-500">${escapeHtml(i.categoryName||i.category)} · ${this.formatDate(i.date)} ${i.recurrent?'(Recurrente)':''}</p></div></div><div class="flex items-center gap-3"><span class="font-bold ${i.type==='income'?'text-brand-600':'text-danger-500'}">${i.type==='income'?'+':'-'}${this.formatMoney(i.amount)}</span><button onclick="app.editFutureItem('${i.id}')" class="text-slate-400 hover:text-brand-600 p-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button><button onclick="app.deleteFutureItem('${i.id}')" class="text-slate-400 hover:text-danger-500 p-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg></button></div></div>`).join('')}</div>`}
-                ${items.some(i=>i.id?.startsWith?.('example_')) ? `<button onclick="app.clearExampleFuture()" class="w-full mt-3 py-2 text-sm text-slate-500">Limpiar ejemplos</button>` : ''}
+                ${items.length===0?'<div class="text-center py-12 text-slate-500"><p>No hay items futuros</p></div>':`<div class="card !p-0 overflow-hidden">${items.map(i=>`<div class="flex items-center justify-between p-4 border-b border-slate-100 last:border-0"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full ${i.type==='income'?'bg-brand-100 text-brand-600':'bg-danger-100 text-danger-600'} flex items-center justify-center font-bold">${i.type==='income'?'+':'-'}</div><div><p class="font-medium">${escapeHtml(i.name)}</p><p class="text-xs text-slate-500">${escapeHtml(i.categoryName||i.category)} · ${this.formatDate(i.date)} ${i.recurrent?'(Recurrente)':''}</p></div></div><div class="flex items-center gap-3"><span class="font-bold ${i.type==='income'?'text-brand-600':'text-danger-500'}">${i.type==='income'?'+':'-'}${this.formatMoney(i.amount)}</span><button onclick="app.editFutureItem('${i.id}')" class="text-slate-400 hover:text-brand-600 p-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button><button onclick="app.deleteFutureItem('${i.id}')" class="text-slate-400 hover:text-danger-500 p-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg></button></div></div>`).join('')}</div>`}
+                ${items.some(i=> String(i.id).startsWith('example_')) ? `<button onclick="app.clearExampleFuture()" class="w-full mt-3 py-2 text-sm text-slate-500">Limpiar ejemplos</button>` : ''}
             </div>`;
         },
-        clearExampleFuture(){ this.data.futureItems = this.data.futureItems.filter(i=>!i.id?.startsWith?.('example_')); this.saveData(); this.navigate('future'); },
+        clearExampleFuture(){ this.data.futureItems = this.data.futureItems.filter(i=> !String(i.id).startsWith('example_')); this.saveData(); this.navigate('future'); },
         renderGoals(container){
-            const goals = this.getGoalsForPeriod();
+            const goals = this.data.goals;
             if(!this.data.settings.viewedSections.goals && goals.length===0){
                 this.data.settings.viewedSections.goals = true;
                 this.saveData();
@@ -644,12 +634,12 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             }
             container.innerHTML = `<div class="space-y-4 animate-fade-in">
                 <button onclick="app.openModal('goal')" class="w-full py-3 bg-brand-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>Nueva Meta</button>
-                ${goals.length===0?'<div class="text-center py-12 text-slate-500">Sin metas en este periodo</div>':''}
-                ${goals.map(g=>{ const saved=g.contributions?.reduce((s,c)=>s+c.amount,0)||0; const pct=Math.min(100,(saved/g.targetAmount)*100); return `<div class="card"><div class="flex justify-between"><div><h3 class="font-bold">${escapeHtml(g.name)}</h3><p class="text-xs text-slate-500">${g.targetDate?'Meta: '+this.formatDate(g.targetDate):'Sin fecha'}</p></div><span class="text-sm font-bold text-brand-600">${pct.toFixed(0)}%</span></div><div class="w-full bg-slate-100 h-3 rounded-full my-2"><div class="bg-brand-500 h-3 rounded-full" style="width:${pct}%"></div></div><div class="flex justify-between text-sm"><span>Ahorrado: ${this.formatMoney(saved)}</span><span>Objetivo: ${this.formatMoney(g.targetAmount)}</span></div><div class="mt-3 pt-3 border-t flex gap-2"><input type="number" id="g-contrib-${g.id}" placeholder="Monto" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg text-sm"><button onclick="app.addContribution('${g.id}')" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm">Aportar</button><button onclick="app.deleteGoal('${g.id}')" class="px-3 py-2 text-danger-500">Eliminar</button></div></div>`}).join('')}
-                ${goals.some(g=>g.id?.startsWith?.('example_')) ? `<button onclick="app.clearExampleGoals()" class="w-full mt-3 py-2 text-sm text-slate-500">Limpiar ejemplo</button>` : ''}
+                ${goals.length===0?'<div class="text-center py-12 text-slate-500">Sin metas activas</div>':''}
+                ${goals.map(g=>{ const saved=g.contributions?.reduce((s,c)=>s+c.amount,0)||0; const pct=Math.min(100,(saved/g.targetAmount)*100); const safeId = String(g.id).replace(/[^a-zA-Z0-9-_]/g, ''); return `<div class="card"><div class="flex justify-between"><div><h3 class="font-bold">${escapeHtml(g.name)}</h3><p class="text-xs text-slate-500">${g.targetDate?'Meta: '+this.formatDate(g.targetDate):'Sin fecha'}</p></div><span class="text-sm font-bold text-brand-600">${pct.toFixed(0)}%</span></div><div class="w-full bg-slate-100 h-3 rounded-full my-2"><div class="bg-brand-500 h-3 rounded-full" style="width:${pct}%"></div></div><div class="flex justify-between text-sm"><span>Ahorrado: ${this.formatMoney(saved)}</span><span>Objetivo: ${this.formatMoney(g.targetAmount)}</span></div><div class="mt-3 pt-3 border-t flex gap-2"><input type="number" id="g-contrib-${safeId}" placeholder="Monto" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg text-sm"><button onclick="app.addContribution('${g.id}')" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm">Aportar</button><button onclick="app.deleteGoal('${g.id}')" class="px-3 py-2 text-danger-500">Eliminar</button></div></div>`}).join('')}
+                ${goals.some(g=> String(g.id).startsWith('example_')) ? `<button onclick="app.clearExampleGoals()" class="w-full mt-3 py-2 text-sm text-slate-500">Limpiar ejemplo</button>` : ''}
             </div>`;
         },
-        clearExampleGoals(){ this.data.goals = this.data.goals.filter(g=>!g.id?.startsWith?.('example_')); this.saveData(); this.navigate('goals'); },
+        clearExampleGoals(){ this.data.goals = this.data.goals.filter(g=> !String(g.id).startsWith('example_')); this.saveData(); this.navigate('goals'); },
         renderSettings(container){
             container.innerHTML = `<div class="space-y-6 animate-fade-in pb-8">
                 <div class="card"><h3 class="font-bold mb-2">FinTrack Pro (Prototipo)</h3></div>
@@ -867,6 +857,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             document.getElementById('btn-delete-future').classList.remove('hidden');
         },
         deleteFutureItem(id){
+            if(!id) return;
             this.showConfirmModal('Eliminar item futuro', '¿Seguro que quieres eliminar este compromiso?', false, ()=>{
                 this.data.futureItems=this.data.futureItems.filter(i=>i.id!==id);
                 this.saveData(); this.showToast('Eliminado'); this.navigate('future');
@@ -880,8 +871,21 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             this.saveData(); this.closeModal('goal'); this.showToast('Meta creada'); this.navigate('goals');
         },
         addContribution(gid){
-            const inp=document.getElementById('g-contrib-'+gid), amt=parseFloat(inp.value); if(!amt||amt<=0) return this.showToast('Monto inválido');
-            const g=this.data.goals.find(x=>x.id===gid); if(g){ g.contributions=g.contributions||[]; g.contributions.push({date:new Date().toISOString().split('T')[0], amount:amt}); this.saveData(); this.showToast('Aporte registrado'); this.navigate('goals'); }
+            const safeId = String(gid).replace(/[^a-zA-Z0-9-_]/g, '');
+            const inp = document.getElementById('g-contrib-'+safeId);
+            if(!inp) return this.showToast('Error: input no encontrado');
+            const amt = parseFloat(inp.value);
+            if(!amt||amt<=0) return this.showToast('Monto inválido');
+            const g = this.data.goals.find(x=>x.id===gid);
+            if(g){ 
+                g.contributions=g.contributions||[]; 
+                g.contributions.push({date:new Date().toISOString().split('T')[0], amount:amt}); 
+                this.saveData(); 
+                this.showToast('Aporte registrado'); 
+                this.navigate('goals'); 
+            } else {
+                this.showToast('Meta no encontrada');
+            }
         },
         deleteGoal(id){
             this.showConfirmModal('Eliminar meta', '¿Eliminar esta meta permanentemente?', false, ()=>{
@@ -945,12 +949,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 : this.getPeriodLabel();
             const pageWidth = doc.internal.pageSize.getWidth();
             
-            // Colores corporativos
-            const primaryColor = [34, 197, 94]; // #22c55e
-            const darkColor = [15, 23, 42]; // #0f172a
-            const lightGray = [241, 245, 249]; // #f1f5f9
+            const primaryColor = [34, 197, 94];
+            const darkColor = [15, 23, 42];
+            const lightGray = [241, 245, 249];
             
-            // Portada
             doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
             doc.rect(0, 0, pageWidth, 40, 'F');
             doc.setTextColor(255, 255, 255);
@@ -966,17 +968,14 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             doc.text(`Período: ${periodLabel}`, 15, 55);
             doc.text(`Generado el ${new Date().toLocaleDateString('es-CL', {day:'numeric', month:'long', year:'numeric'})}`, 15, 62);
             
-            // Línea separadora
             doc.setDrawColor(200, 200, 200);
             doc.line(15, 68, pageWidth-15, 68);
             
-            // Resumen Ejecutivo
             doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
             doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
             doc.text('Resumen Ejecutivo', 15, 82);
             
-            // KPIs en cajas
             const kpis = [
                 { label: 'Saldo actual', value: this.formatMoney(metrics.balance), color: metrics.balance>=0?primaryColor:[239,68,68] },
                 { label: 'Proyección', value: this.formatMoney(metrics.projected), color: metrics.projected>=0?primaryColor:[239,68,68] },
@@ -1003,7 +1002,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             
             yPos += 30;
             
-            // Gastos por categoría
             if (Object.keys(metrics.catMap).length > 0) {
                 doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
                 doc.setFontSize(14);
@@ -1025,7 +1023,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 yPos = doc.lastAutoTable.finalY + 10;
             }
             
-            // Historial de transacciones
             const periodTx = this.getTransactionsForPeriod();
             if (periodTx.length > 0) {
                 doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
@@ -1051,7 +1048,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 yPos = doc.lastAutoTable.finalY + 10;
             }
             
-            // Compromisos Futuros
             if (this.data.futureItems.length > 0) {
                 doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
                 doc.setFontSize(14);
@@ -1076,7 +1072,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 yPos = doc.lastAutoTable.finalY + 10;
             }
             
-            // Metas activas
             if (this.data.goals.length > 0) {
                 doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
                 doc.setFontSize(14);
@@ -1096,10 +1091,8 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                     headStyles: { fillColor: primaryColor, textColor: 255 },
                     margin: { left: 15, right: 15 }
                 });
-                yPos = doc.lastAutoTable.finalY + 15;
             }
             
-            // Pie de página
             doc.setFontSize(8);
             doc.setTextColor(100, 116, 139);
             doc.text('Este informe es generado automáticamente por FinTrack.', 15, pageWidth-20);
@@ -1113,7 +1106,8 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         showToast(m){ const t=document.getElementById('toast'); document.getElementById('toast-msg').textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); },
         requestClearAllData(){
             this.showConfirmModal('Eliminar todos los datos', 'Esta acción es irreversible. Escribe BORRAR para confirmar.', true, ()=>{
-                localStorage.removeItem('fintrack_data'); location.reload();
+                localStorage.clear(); // Limpia todo el localStorage
+                window.location.reload(true);
             });
         }
     };
