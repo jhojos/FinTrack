@@ -51,7 +51,7 @@ html, body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: tran
 .modal-overlay { position: absolute; inset: 0; z-index: 60; display: none; }
 .modal-overlay.active { display: flex; }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
-.modal-sheet { position: absolute; bottom: 0; left: 0; right: 0; background: white; border-radius: 24px 24px 0 0; padding: 24px; max-height: 90%; overflow-y: auto; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+.modal-sheet { position: absolute; bottom: 0; left: 0; right: 0; background: white; border-radius: 24px 24px 0 0; padding: 24px; max-height: 90%; overflow-y: auto; overscroll-behavior: contain; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 .dark .modal-sheet { background: #0f172a; }
 .modal-overlay.active .modal-sheet { transform: translateY(0); }
 @media (min-width: 640px) { .modal-sheet { border-radius: 24px; bottom: auto; top: 50%; left: 50%; right: auto; width: 90%; max-width: 380px; transform: translate(-50%, -50%) scale(0.95); max-height: 85%; opacity: 0; transition: all 0.25s ease-out; } .modal-overlay.active .modal-sheet { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
@@ -101,6 +101,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .sticky-summary { position: sticky; top: 0; z-index: 5; background: white; padding: 8px 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 8px; }
 .dark .sticky-summary { background: #0f172a; border-color: #334155; }
 </style>
+<base target="_blank">
 </head>
 <body class="bg-gray-200 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
 
@@ -250,12 +251,13 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 <div id="modal-goal" class="modal-overlay">
     <div class="modal-backdrop" onclick="app.closeModal('goal')"></div>
     <div class="modal-sheet">
-        <h3 class="text-lg font-bold mb-4">Nueva Meta</h3>
+        <h3 class="text-lg font-bold mb-4" id="goal-modal-title">Nueva Meta</h3>
         <form onsubmit="app.saveGoal(event)" class="space-y-4">
+            <input type="hidden" id="g-id">
             <input type="text" id="g-name" class="input-field" placeholder="Nombre de la meta" required>
             <input type="number" id="g-target" inputmode="numeric" class="input-field" placeholder="Monto objetivo" required>
             <input type="date" id="g-date" class="input-field">
-            <button type="submit" class="w-full py-4 bg-brand-600 text-white font-bold rounded-xl shadow-lg">Crear Meta</button>
+            <button type="submit" class="w-full py-4 bg-brand-600 text-white font-bold rounded-xl shadow-lg" id="btn-save-goal">Crear Meta</button>
         </form>
     </div>
 </div>
@@ -291,7 +293,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
     </div>
 </div>
 
-<!-- Confirm Delete Modal (genérico) -->
+<!-- Confirm Delete Modal -->
 <div id="modal-confirm" class="modal-overlay">
     <div class="modal-backdrop" onclick="app.closeModal('confirm')"></div>
     <div class="modal-sheet">
@@ -363,7 +365,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             settings: { currency: 'CLP', currencySymbol: '$', theme: 'dark', firstVisit: true, viewedSections: {} },
             user: { isLoggedIn: true, name: 'Usuario', email: 'test@fintrack.app', plan: 'pro', planExpiry: null },
             currentPage: 'home', currentMonth: new Date().getMonth(), currentYear: new Date().getFullYear(),
-            customPeriod: null, periodType: 'month',
+            customPeriod: null, periodType: 'month', weekOffset: 0,
             txType: 'expense', futureType: 'expense',
             longPressTimer: null, longPressTriggered: false, editingId: null, editingFutureId: null,
             speechRecognition: null,
@@ -385,6 +387,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 this.data.user.plan='pro'; this.data.user.isLoggedIn=true;
                 if(!this.data.settings.viewedSections) this.data.settings.viewedSections = {};
                 if(!this.data.uiState) this.data.uiState = { historySearch: '', historyFilter: 'all' };
+                if(typeof this.data.weekOffset !== 'number') this.data.weekOffset = 0;
             }catch(e){}
         },
         saveData(){ localStorage.setItem('fintrack_data', JSON.stringify(this.data)); },
@@ -400,8 +403,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 const today = new Date();
                 const day = today.getDay();
                 const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-                const start = new Date(today.setDate(diff));
-                const end = new Date(today.setDate(start.getDate() + 6));
+                const start = new Date(today.getFullYear(), today.getMonth(), diff);
+                start.setDate(start.getDate() + (this.data.weekOffset * 7));
+                const end = new Date(start);
+                end.setDate(start.getDate() + 6);
                 return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
             } else {
                 const start = new Date(this.data.currentYear, this.data.currentMonth, 1);
@@ -410,8 +415,14 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             }
         },
         getPeriodLabel() {
-            const r = this.getCurrentPeriodRange();
-            return this.data.periodType === 'week' ? `Semana del ${this.formatDate(r.start)} al ${this.formatDate(r.end)}` : this.formatMonth(this.data.currentYear, this.data.currentMonth);
+            if (this.data.customPeriod) {
+                return `${this.formatDate(this.data.customPeriod.start)} – ${this.formatDate(this.data.customPeriod.end)}`;
+            }
+            if (this.data.periodType === 'week') {
+                const r = this.getCurrentPeriodRange();
+                return `Semana del ${this.formatDate(r.start)} al ${this.formatDate(r.end)}`;
+            }
+            return this.formatMonth(this.data.currentYear, this.data.currentMonth);
         },
         updatePeriodLabel() {
             document.getElementById('current-month-label').textContent = this.getPeriodLabel();
@@ -420,48 +431,66 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         toggleWeekMonth() {
             this.data.periodType = this.data.periodType === 'month' ? 'week' : 'month';
             this.data.customPeriod = null;
+            this.data.weekOffset = 0;
+            this.data.uiState.historySearch = '';
+            this.data.uiState.historyFilter = 'all';
             this.navigate(this.data.currentPage);
         },
         prevPeriod() {
             if (this.data.periodType === 'week') {
-                const r = this.getCurrentPeriodRange();
-                const start = new Date(r.start); start.setDate(start.getDate() - 7);
-                const end = new Date(start); end.setDate(start.getDate() + 6);
-                this.data.customPeriod = { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
+                this.data.weekOffset--;
+                this.data.customPeriod = null;
             } else {
                 this.data.customPeriod = null;
                 this.data.currentMonth--;
                 if(this.data.currentMonth<0){ this.data.currentMonth=11; this.data.currentYear--; }
             }
+            this.data.uiState.historySearch = '';
+            this.data.uiState.historyFilter = 'all';
             this.navigate(this.data.currentPage);
         },
         nextPeriod() {
             if (this.data.periodType === 'week') {
-                const r = this.getCurrentPeriodRange();
-                const start = new Date(r.start); start.setDate(start.getDate() + 7);
-                const end = new Date(start); end.setDate(start.getDate() + 6);
-                this.data.customPeriod = { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
+                this.data.weekOffset++;
+                this.data.customPeriod = null;
             } else {
                 this.data.customPeriod = null;
                 this.data.currentMonth++;
                 if(this.data.currentMonth>11){ this.data.currentMonth=0; this.data.currentYear++; }
             }
+            this.data.uiState.historySearch = '';
+            this.data.uiState.historyFilter = 'all';
             this.navigate(this.data.currentPage);
         },
         openMonthPicker() {
             const grid=document.getElementById('month-grid'), months=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'], y=this.data.currentYear;
-            grid.innerHTML = months.map((m,i)=>`<button onclick="app.selectMonth(${y},${i})" class="py-3 rounded-xl text-sm font-medium ${i===this.data.currentMonth&&!this.data.customPeriod?'bg-brand-600 text-white shadow-lg':'bg-slate-100 dark:bg-slate-800'}'">${m}</button>`).join('');
+            grid.innerHTML = months.map((m,i)=>`<button onclick="app.selectMonth(${y},${i})" class="py-3 rounded-xl text-sm font-medium ${i===this.data.currentMonth&&!this.data.customPeriod?'bg-brand-600 text-white shadow-lg':'bg-slate-100 dark:bg-slate-800'}">${m}</button>`).join('');
             this.openModal('month');
         },
-        selectMonth(y,m){ this.data.customPeriod=null; this.data.currentYear=y; this.data.currentMonth=m; this.closeModal('month'); this.navigate(this.data.currentPage); },
+        selectMonth(y,m){ 
+            this.data.customPeriod=null; 
+            this.data.currentYear=y; 
+            this.data.currentMonth=m; 
+            this.data.weekOffset = 0;
+            this.data.uiState.historySearch = '';
+            this.data.uiState.historyFilter = 'all';
+            this.closeModal('month'); 
+            this.navigate(this.data.currentPage); 
+        },
         applyCustomPeriod(){
             const s=document.getElementById('custom-start').value, e=document.getElementById('custom-end').value;
             if(!s||!e) return this.showToast('Selecciona ambas fechas');
             if(s>e) return this.showToast('La fecha inicial debe ser anterior');
-            this.data.customPeriod={start:s, end:e}; this.closeModal('month'); this.navigate(this.data.currentPage);
+            this.data.customPeriod={start:s, end:e}; 
+            this.data.weekOffset = 0;
+            this.data.uiState.historySearch = '';
+            this.data.uiState.historyFilter = 'all';
+            this.closeModal('month'); 
+            this.navigate(this.data.currentPage);
         },
 
         navigate(page){
+            hideTooltip();
             this.data.currentPage=page;
             document.querySelectorAll('.nav-btn').forEach(b=>{ const act=b.dataset.page===page; b.classList.toggle('text-brand-600',act); b.classList.toggle('dark:text-brand-500',act); b.classList.toggle('text-slate-400',!act); });
             document.getElementById('page-title').textContent = {home:'Inicio',history:'Historial',future:'Futuro',goals:'Metas',settings:'Configuración'}[page];
@@ -480,7 +509,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             return this.data.transactions.filter(t=>t.date >= r.start && t.date <= r.end);
         },
         getFutureItemsForPeriod(){
-            return this.data.futureItems.sort((a,b)=>new Date(a.date)-new Date(b.date));
+            const r = this.getCurrentPeriodRange();
+            return this.data.futureItems
+                .filter(i => i.date >= r.start && i.date <= r.end)
+                .sort((a,b)=>new Date(a.date)-new Date(b.date));
         },
 
         getCategoryUsageCounts() {
@@ -491,7 +523,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         },
         sortCategoriesByUsage(cats) {
             const counts = this.getCategoryUsageCounts();
-            return cats.sort((a,b) => (counts[b.id]||0) - (counts[a.id]||0));
+            return [...cats].sort((a,b) => (counts[b.id]||0) - (counts[a.id]||0));
         },
 
         renderHome(container){
@@ -513,7 +545,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const monthlyPaceHtml = hasEnough ? `<p class="text-lg font-bold">${this.formatMoney(metrics.monthlyPace)}</p>` : dailyAvgHtml;
             container.innerHTML = `<div class="space-y-4 animate-fade-in">
                 ${this.data.customPeriod?`<div class="period-badge mb-1">Periodo: ${this.formatDate(this.data.customPeriod.start)} – ${this.formatDate(this.data.customPeriod.end)}</div>`:''}
-                <div class="grid grid-cols-2 gap-3"><div class="card bg-slate-900 text-white"><p class="text-[10px] uppercase">Saldo</p><p class="text-xl font-bold ${metrics.balance>=0?'':'text-red-400'}">${this.formatMoney(metrics.balance)}</p></div><div class="card"><div class="flex items-center gap-1"><p class="text-[10px] uppercase">Proyección</p><span class="info-icon" onclick="showInfo(event,'Saldo proyectado considerando futuros.')">ⓘ</span></div><p class="text-xl font-bold ${metrics.projected>=0?'text-brand-600':'text-danger-500'}">${this.formatMoney(metrics.projected)}</p></div></div>
+                <div class="grid grid-cols-2 gap-3"><div class="card bg-slate-900 text-white"><p class="text-[10px] uppercase">Saldo</p><p class="text-xl font-bold ${metrics.balance>=0?'':'text-red-400'}">${this.formatMoney(metrics.balance)}</p></div><div class="card"><div class="flex items-center gap-1"><p class="text-[10px] uppercase">Proyección</p><span class="info-icon" onclick="showInfo(event,'Saldo proyectado considerando futuros del período.')">ⓘ</span></div><p class="text-xl font-bold ${metrics.projected>=0?'text-brand-600':'text-danger-500'}">${this.formatMoney(metrics.projected)}</p></div></div>
                 <div class="grid grid-cols-3 gap-3">
                     <div class="card text-center py-3"><div class="flex justify-center gap-1"><p class="text-[10px] uppercase">Días reserva</p><span class="info-icon" onclick="showInfo(event,'Días que cubre tu saldo actual.')">ⓘ</span></div><p class="text-lg font-bold text-brand-600">${coverageText}</p></div>
                     <div class="card text-center py-3"><div class="flex justify-center gap-1"><p class="text-[10px] uppercase">Ritmo ${this.data.periodType==='week'?'Semanal':'Mensual'}</p><span class="info-icon" onclick="showInfo(event,'Proyección de gasto total del período.')">ⓘ</span></div>${monthlyPaceHtml}${hasEnough?'<p class="text-[10px] text-slate-400">estimado</p>':''}</div>
@@ -532,20 +564,27 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const expense = periodTx.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
             const balance = income - expense;
             const expenseTx = periodTx.filter(t=>t.type==='expense');
-            let daysActive=0, hasExpense=false;
-            if(expenseTx.length){
-                const dates = expenseTx.map(t=>new Date(t.date+'T00:00:00').getTime());
-                daysActive = Math.max(1, Math.floor((Math.max(...dates)-Math.min(...dates))/(86400000))+1);
-                hasExpense=true;
-            }
+            
+            const uniqueExpenseDates = new Set(expenseTx.map(t => t.date));
+            const daysActive = uniqueExpenseDates.size;
+            const hasExpense = daysActive > 0;
+            
             const dailyAvg = hasExpense ? expenseTx.reduce((s,t)=>s+t.amount,0)/daysActive : 0;
             const r = this.getCurrentPeriodRange();
-            const daysInPeriod = (new Date(r.end) - new Date(r.start))/86400000 + 1;
+            const startDate = new Date(r.start + 'T00:00:00');
+            const endDate = new Date(r.end + 'T00:00:00');
+            const daysInPeriod = Math.max(1, Math.floor((endDate - startDate)/86400000) + 1);
             const periodPace = dailyAvg * daysInPeriod;
-            const coverage = (hasExpense&&dailyAvg>0) ? Math.floor(balance/dailyAvg) : 0;
-            const futureInc = this.data.futureItems.filter(i=>i.type==='income').reduce((s,i)=>s+i.amount,0);
-            const futureExp = this.data.futureItems.filter(i=>i.type==='expense').reduce((s,i)=>s+i.amount,0);
+            const coverage = (hasExpense && dailyAvg > 0) ? Math.floor(balance/dailyAvg) : 0;
+            
+            const futureInc = this.data.futureItems
+                .filter(i => i.type === 'income' && i.date >= r.start && i.date <= r.end)
+                .reduce((s,i) => s + i.amount, 0);
+            const futureExp = this.data.futureItems
+                .filter(i => i.type === 'expense' && i.date >= r.start && i.date <= r.end)
+                .reduce((s,i) => s + i.amount, 0);
             const projected = balance + futureInc - futureExp;
+            
             const catMap = {}; expenseTx.forEach(t=>{ const n=t.categoryName||t.category; catMap[n]=(catMap[n]||0)+t.amount; });
             const totalCat = Object.values(catMap).reduce((a,b)=>a+b,0);
             const breakdown = Object.entries(catMap).map(([n,a])=>({name:n, amount:a, percent: totalCat?(a/totalCat)*100:0})).sort((a,b)=>b.amount-a.amount).slice(0,5);
@@ -555,9 +594,12 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const currPeriod = this.getCurrentPeriodRange();
             let prevStart, prevEnd;
             if (this.data.periodType === 'week') {
-                const s = new Date(currPeriod.start); s.setDate(s.getDate() - 7);
+                const s = new Date(currPeriod.start + 'T00:00:00'); 
+                s.setDate(s.getDate() - 7);
                 prevStart = s.toISOString().split('T')[0];
-                prevEnd = new Date(s.getTime() + 6*86400000).toISOString().split('T')[0];
+                const e = new Date(currPeriod.end + 'T00:00:00');
+                e.setDate(e.getDate() - 7);
+                prevEnd = e.toISOString().split('T')[0];
             } else {
                 const prevMonth = this.data.currentMonth===0?11:this.data.currentMonth-1;
                 const prevYear = this.data.currentMonth===0?this.data.currentYear-1:this.data.currentYear;
@@ -585,17 +627,23 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const groups = {}; txs.forEach(t=>{ if(!groups[t.date]) groups[t.date]=[]; groups[t.date].push(t); });
             container.innerHTML = `<div class="space-y-2 animate-fade-in">
                 <div class="flex gap-2 sticky top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur py-2 z-10">
-                    <div class="relative flex-1"><input type="text" id="history-search" placeholder="Buscar..." class="w-full px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-sm" value="${escapeHtml(search)}">${search?`<button class="search-clear-btn" onclick="app.clearHistorySearch()">&times;</button>`:''}</div>
-                    <select id="history-filter" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-sm"><option value="all" ${filter==='all'?'selected':''}>Todos</option><option value="expense" ${filter==='expense'?'selected':''}>Gastos</option><option value="income" ${filter==='income'?'selected':''}>Ingresos</option></select>
+                    <div class="relative flex-1"><input type="text" id="history-search" placeholder="Buscar..." class="w-full px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-sm" value="${escapeHtml(search)}" oninput="app.handleHistorySearch(this.value)">${search?`<button class="search-clear-btn" onclick="app.clearHistorySearch()">&times;</button>`:''}</div>
+                    <select id="history-filter" class="px-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-sm" onchange="app.handleHistoryFilter(this.value)"><option value="all" ${filter==='all'?'selected':''}>Todos</option><option value="expense" ${filter==='expense'?'selected':''}>Gastos</option><option value="income" ${filter==='income'?'selected':''}>Ingresos</option></select>
                 </div>
                 <div class="sticky-summary"><div class="flex justify-between text-sm"><span>${txs.length} movimientos</span><span>Ingresos: <span class="text-brand-600">${this.formatMoney(totalIncome)}</span> · Gastos: <span class="text-danger-500">${this.formatMoney(totalExpense)}</span></span></div></div>
                 ${Object.keys(groups).length===0?'<div class="text-center py-12 text-slate-500">No hay movimientos</div>':''}
                 ${Object.entries(groups).map(([date,items])=>`<div><h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">${this.formatDate(date)}</h4><div class="card !p-0 overflow-hidden">${items.map(t=>`<div class="flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer" onclick="app.editTransaction('${t.id}')"><div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full ${t.type==='income'?'bg-brand-100 text-brand-600':'bg-danger-100 text-danger-600'} flex items-center justify-center font-bold">${t.type==='income'?'+':'-'}</div><div><p class="font-medium text-sm">${escapeHtml(t.categoryName||t.category)}</p>${t.note?`<p class="text-xs text-slate-500 truncate max-w-[150px]">${escapeHtml(t.note)}</p>`:''}</div></div><span class="font-bold ${t.type==='income'?'text-brand-600':'text-danger-500'}">${t.type==='income'?'+':'-'}${this.formatMoney(t.amount)}</span></div>`).join('')}</div></div>`).join('')}
             </div>`;
-            const searchInput = document.getElementById('history-search');
-            const filterSelect = document.getElementById('history-filter');
-            searchInput?.addEventListener('input', e => { this.data.uiState.historySearch = e.target.value; this.saveData(); this.renderHistory(container); });
-            filterSelect?.addEventListener('change', e => { this.data.uiState.historyFilter = e.target.value; this.saveData(); this.renderHistory(container); });
+        },
+        handleHistorySearch(val){
+            this.data.uiState.historySearch = val;
+            this.saveData();
+            this.renderHistory(document.getElementById('main-content'));
+        },
+        handleHistoryFilter(val){
+            this.data.uiState.historyFilter = val;
+            this.saveData();
+            this.renderHistory(document.getElementById('main-content'));
         },
         clearHistorySearch(){
             this.data.uiState.historySearch = '';
@@ -635,7 +683,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             container.innerHTML = `<div class="space-y-4 animate-fade-in">
                 <button onclick="app.openModal('goal')" class="w-full py-3 bg-brand-600 text-white rounded-xl font-semibold flex items-center justify-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>Nueva Meta</button>
                 ${goals.length===0?'<div class="text-center py-12 text-slate-500">Sin metas activas</div>':''}
-                ${goals.map(g=>{ const saved=g.contributions?.reduce((s,c)=>s+c.amount,0)||0; const pct=Math.min(100,(saved/g.targetAmount)*100); const safeId = String(g.id).replace(/[^a-zA-Z0-9-_]/g, ''); return `<div class="card"><div class="flex justify-between"><div><h3 class="font-bold">${escapeHtml(g.name)}</h3><p class="text-xs text-slate-500">${g.targetDate?'Meta: '+this.formatDate(g.targetDate):'Sin fecha'}</p></div><span class="text-sm font-bold text-brand-600">${pct.toFixed(0)}%</span></div><div class="w-full bg-slate-100 h-3 rounded-full my-2"><div class="bg-brand-500 h-3 rounded-full" style="width:${pct}%"></div></div><div class="flex justify-between text-sm"><span>Ahorrado: ${this.formatMoney(saved)}</span><span>Objetivo: ${this.formatMoney(g.targetAmount)}</span></div><div class="mt-3 pt-3 border-t flex gap-2"><input type="number" id="g-contrib-${safeId}" placeholder="Monto" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg text-sm"><button onclick="app.addContribution('${g.id}')" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm">Aportar</button><button onclick="app.deleteGoal('${g.id}')" class="px-3 py-2 text-danger-500">Eliminar</button></div></div>`}).join('')}
+                ${goals.map(g=>{ const saved=g.contributions?.reduce((s,c)=>s+c.amount,0)||0; const pct=Math.min(100,(saved/g.targetAmount)*100); const safeId = String(g.id).replace(/[^a-zA-Z0-9-_]/g, ''); return `<div class="card"><div class="flex justify-between"><div><h3 class="font-bold">${escapeHtml(g.name)}</h3><p class="text-xs text-slate-500">${g.targetDate?'Meta: '+this.formatDate(g.targetDate):'Sin fecha'}</p></div><span class="text-sm font-bold text-brand-600">${pct.toFixed(0)}%</span></div><div class="w-full bg-slate-100 h-3 rounded-full my-2"><div class="bg-brand-500 h-3 rounded-full" style="width:${pct}%"></div></div><div class="flex justify-between text-sm"><span>Ahorrado: ${this.formatMoney(saved)}</span><span>Objetivo: ${this.formatMoney(g.targetAmount)}</span></div><div class="mt-3 pt-3 border-t flex gap-2"><input type="number" id="g-contrib-${safeId}" placeholder="Monto" class="flex-1 px-3 py-2 bg-slate-50 rounded-lg text-sm"><button onclick="app.addContribution('${g.id}')" class="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm">Aportar</button><button onclick="app.editGoal('${g.id}')" class="px-3 py-2 text-slate-500">Editar</button><button onclick="app.deleteGoal('${g.id}')" class="px-3 py-2 text-danger-500">Eliminar</button></div></div>`}).join('')}
                 ${goals.some(g=> String(g.id).startsWith('example_')) ? `<button onclick="app.clearExampleGoals()" class="w-full mt-3 py-2 text-sm text-slate-500">Limpiar ejemplo</button>` : ''}
             </div>`;
         },
@@ -655,7 +703,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 <div class="card">
                     <button onclick="app.requestClearAllData()" class="w-full p-4 text-danger-600">Borrar todos los datos</button>
                 </div>
-                <div class="text-center text-xs text-slate-400 pt-4">FinTrack v2.0 · Prototipo</div>
+                <div class="text-center text-xs text-slate-400 pt-4">FinTrack v2.1 · Prototipo</div>
             </div>`;
         },
 
@@ -708,7 +756,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 this.populateFutureCategories(); document.getElementById('btn-delete-future').classList.add('hidden');
                 document.getElementById('modal-future').classList.add('active');
             }else if(type==='goal'){
+                document.getElementById('goal-modal-title').textContent='Nueva Meta';
+                document.getElementById('g-id').value='';
                 document.getElementById('g-name').value=''; document.getElementById('g-target').value=''; document.getElementById('g-date').value='';
+                document.getElementById('btn-save-goal').textContent='Crear Meta';
                 document.getElementById('modal-goal').classList.add('active');
             }else if(type==='month'){
                 this.openMonthPicker();
@@ -761,9 +812,34 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const amt=parseFloat(document.getElementById('t-amount').value), cat=document.getElementById('t-category').value, date=document.getElementById('t-date').value, note=document.getElementById('t-note').value;
             if(!amt||amt<=0) return;
             const catObj=this.data.categories.find(c=>c.id===cat);
-            const tx={ id:this.data.editingId||this.generateId(), type:this.data.txType, amount:amt, category:cat, categoryName:catObj?.name||cat, date, note, source:'manual', createdAt:new Date().toISOString() };
-            if(this.data.editingId){ const idx=this.data.transactions.findIndex(t=>t.id===this.data.editingId); if(idx!==-1) this.data.transactions[idx]=tx; else this.data.transactions.push(tx); }
-            else this.data.transactions.push(tx);
+            if(this.data.editingId){
+                const idx = this.data.transactions.findIndex(t=>t.id===this.data.editingId);
+                if(idx!==-1){
+                    const original = this.data.transactions[idx];
+                    this.data.transactions[idx] = {
+                        ...original,
+                        type: this.data.txType,
+                        amount: amt,
+                        category: cat,
+                        categoryName: catObj?.name||cat,
+                        date,
+                        note,
+                        updatedAt: new Date().toISOString()
+                    };
+                } else {
+                    this.data.transactions.push({
+                        id: this.generateId(), type: this.data.txType, amount: amt, category: cat,
+                        categoryName: catObj?.name||cat, date, note, source: 'manual',
+                        createdAt: new Date().toISOString()
+                    });
+                }
+            } else {
+                this.data.transactions.push({
+                    id: this.generateId(), type: this.data.txType, amount: amt, category: cat,
+                    categoryName: catObj?.name||cat, date, note, source: 'manual',
+                    createdAt: new Date().toISOString()
+                });
+            }
             this.saveData(); this.closeModal('transaction'); this.showToast(this.data.editingId?'Actualizado':'Guardado'); this.data.editingId=null; this.navigate(this.data.currentPage);
         },
         editTransaction(id){
@@ -791,25 +867,54 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         updateExpressPreview(val){
             const preview=document.getElementById('express-preview');
             if(!val) { preview.classList.add('hidden'); return; }
-            const parts=val.split(' '), amt=parseFloat(parts[0]), rest=parts.slice(1).join(' ');
+            const cleaned = val.replace(/\./g, '').replace(/,/g, '.');
+            const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+            if(!match) { preview.textContent='Formato: monto categoría'; preview.classList.remove('hidden'); return; }
+            const amt = parseFloat(match[1]);
+            const rest = match[2].trim();
             if(isNaN(amt)) { preview.textContent='Monto no válido'; preview.classList.remove('hidden'); return; }
-            let type='expense'; if(/sueldo|salario|ingreso|cobro/i.test(rest)) type='income';
-            let cat='Otros'; for(const c of this.data.categories) if(rest.toLowerCase().includes(c.name.toLowerCase())) { cat=c.name; break; }
+            let type='expense'; 
+            if(/sueldo|salario|ingreso|cobro/i.test(rest)) type='income';
+            let cat='Otros'; 
+            for(const c of this.data.categories) {
+                if(rest.toLowerCase().includes(c.name.toLowerCase())) { cat=c.name; break; }
+            }
             preview.innerHTML = `${type==='income'?'➕ Ingreso':'🔻 Gasto'} de <strong>${this.formatMoney(amt)}</strong> en <strong>${cat}</strong> ${rest?`(${rest})`:''}`;
             preview.classList.remove('hidden');
         },
         saveExpress(e){
             e.preventDefault();
-            const input=document.getElementById('express-input').value.trim(); if(!input) return;
-            const parts=input.split(' '), amt=parseFloat(parts[0]), rest=parts.slice(1).join(' ');
-            if(!amt||isNaN(amt)) return this.showToast('Monto inválido');
-            let type='expense'; if(/sueldo|salario|ingreso|cobro/i.test(rest)) type='income';
-            let catId='other'; for(const c of this.data.categories) if(rest.toLowerCase().includes(c.name.toLowerCase())) { catId=c.id; break; }
+            const input=document.getElementById('express-input').value.trim(); 
+            if(!input) return;
+            const cleaned = input.replace(/\./g, '').replace(/,/g, '.');
+            const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+            if(!match) return this.showToast('Formato inválido');
+            const amt = parseFloat(match[1]);
+            const rest = match[2].trim();
+            if(!amt||isNaN(amt)||amt<=0) return this.showToast('Monto inválido');
+            let type='expense'; 
+            if(/sueldo|salario|ingreso|cobro/i.test(rest)) type='income';
+            let catId='other'; 
+            for(const c of this.data.categories) {
+                if(rest.toLowerCase().includes(c.name.toLowerCase())) { catId=c.id; break; }
+            }
             const cat=this.data.categories.find(c=>c.id===catId);
             this.data.transactions.push({ id:this.generateId(), type, amount:amt, category:catId, categoryName:cat?.name||catId, date:new Date().toISOString().split('T')[0], note:rest, source:'express', createdAt:new Date().toISOString() });
             this.saveData(); this.closeModal('express'); this.showToast('Guardado'); this.navigate('home');
         },
-        startLongPress(e){ if(e.type==='mousedown'&&e.button!==0) return; this.longPressTriggered=false; document.getElementById('fab-ring').classList.add('active'); this.data.longPressTimer=setTimeout(()=>{ this.longPressTriggered=true; document.getElementById('fab-ring').classList.remove('active'); this.closeModal('transaction'); this.openModal('express'); if(navigator.vibrate) navigator.vibrate(50); },700); },
+        startLongPress(e){ 
+            if(e.type==='mousedown'&&e.button!==0) return; 
+            if(e.type==='touchstart') e.preventDefault();
+            this.longPressTriggered=false; 
+            document.getElementById('fab-ring').classList.add('active'); 
+            this.data.longPressTimer=setTimeout(()=>{ 
+                this.longPressTriggered=true; 
+                document.getElementById('fab-ring').classList.remove('active'); 
+                this.closeModal('transaction'); 
+                this.openModal('express'); 
+                if(navigator.vibrate) navigator.vibrate(50); 
+            },700); 
+        },
         endLongPress(){ document.getElementById('fab-ring').classList.remove('active'); clearTimeout(this.data.longPressTimer); },
         cancelLongPress(){ this.endLongPress(); },
         startVoiceInput(){
@@ -823,12 +928,25 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             rec.start();
         },
         parseVoiceInput(txt){
-            const m=txt.match(/(\d[\d\s]*)/); const amt=m?parseFloat(m[1].replace(/\s/g,'')):null;
-            let type='expense'; if(/ingres|cobr|recib/i.test(txt)) type='income';
-            let note=txt; if(amt) note=txt.replace(m[1],'').trim();
+            const m=txt.match(/(\d[\d\s]*)/); 
+            const amt=m?parseFloat(m[1].replace(/\s/g,'')):null;
+            let type='expense'; 
+            if(/ingres|cobr|recib/i.test(txt)) type='income';
+            let note=txt; 
+            if(amt) note=txt.replace(m[1],'').trim();
             note=note.replace(/(gast[eé]|pag[ué]|ingres[eé]|cobr[eé]|de|en|por)/g,'').trim();
-            if(amt){ this.setTransactionType(type); document.getElementById('t-amount').value=amt; document.getElementById('t-note').value=note; this.autoCategorize(note); this.showToast('Voz procesada'); }
-            else this.showToast('No se detectó monto');
+            if(amt){ 
+                if(!document.getElementById('modal-transaction').classList.contains('active')){
+                    this.openModal('transaction');
+                }
+                this.setTransactionType(type); 
+                document.getElementById('t-amount').value=amt; 
+                document.getElementById('t-note').value=note; 
+                this.autoCategorize(note); 
+                this.showToast('Voz procesada'); 
+            } else {
+                this.showToast('No se detectó monto');
+            }
         },
         setFutureType(t){ this.data.futureType=t; this.updateFutureTypeUI(); },
         updateFutureTypeUI(){
@@ -842,9 +960,25 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const id=document.getElementById('f-id').value, name=document.getElementById('f-name').value.trim(), amt=parseFloat(document.getElementById('f-amount').value), date=document.getElementById('f-date').value, catId=document.getElementById('f-category').value, rec=document.getElementById('f-recurrent').checked;
             if(!name||!amt||amt<=0||!date) return this.showToast('Completa los campos');
             const cat=this.data.categories.find(c=>c.id===catId);
-            const item={ id: id||this.generateId(), type:this.data.futureType, name, amount:amt, date, category:catId, categoryName:cat?.name||catId, recurrent:rec, createdAt:new Date().toISOString() };
-            if(id){ const idx=this.data.futureItems.findIndex(i=>i.id===id); if(idx!==-1) this.data.futureItems[idx]=item; }
-            else this.data.futureItems.push(item);
+            if(id){
+                const idx=this.data.futureItems.findIndex(i=>i.id===id);
+                if(idx!==-1){
+                    const original = this.data.futureItems[idx];
+                    this.data.futureItems[idx] = {
+                        ...original,
+                        type: this.data.futureType,
+                        name, amount: amt, date, category: catId,
+                        categoryName: cat?.name||catId, recurrent: rec,
+                        updatedAt: new Date().toISOString()
+                    };
+                }
+            } else {
+                this.data.futureItems.push({
+                    id: this.generateId(), type: this.data.futureType, name, amount: amt, date,
+                    category: catId, categoryName: cat?.name||catId, recurrent: rec,
+                    createdAt: new Date().toISOString()
+                });
+            }
             this.saveData(); this.closeModal('future'); this.showToast(id?'Actualizado':'Guardado'); this.navigate('future');
         },
         editFutureItem(id){
@@ -865,10 +999,27 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
         },
         saveGoal(e){
             e.preventDefault();
+            const id=document.getElementById('g-id').value;
             const name=document.getElementById('g-name').value.trim(), target=parseFloat(document.getElementById('g-target').value), date=document.getElementById('g-date').value;
             if(!name||!target||target<=0) return this.showToast('Completa los campos');
-            this.data.goals.push({ id:this.generateId(), name, targetAmount:target, targetDate:date, contributions:[], createdAt:new Date().toISOString() });
-            this.saveData(); this.closeModal('goal'); this.showToast('Meta creada'); this.navigate('goals');
+            if(id){
+                const g = this.data.goals.find(x=>x.id===id);
+                if(g){ g.name=name; g.targetAmount=target; g.targetDate=date||null; this.saveData(); this.closeModal('goal'); this.showToast('Meta actualizada'); this.navigate('goals'); }
+            } else {
+                this.data.goals.push({ id:this.generateId(), name, targetAmount:target, targetDate:date, contributions:[], createdAt:new Date().toISOString() });
+                this.saveData(); this.closeModal('goal'); this.showToast('Meta creada'); this.navigate('goals');
+            }
+        },
+        editGoal(id){
+            const g = this.data.goals.find(x => x.id === id);
+            if(!g) return;
+            this.openModal('goal');
+            document.getElementById('goal-modal-title').textContent='Editar Meta';
+            document.getElementById('g-id').value=g.id;
+            document.getElementById('g-name').value=g.name;
+            document.getElementById('g-target').value=g.targetAmount;
+            document.getElementById('g-date').value=g.targetDate||'';
+            document.getElementById('btn-save-goal').textContent='Actualizar Meta';
         },
         addContribution(gid){
             const safeId = String(gid).replace(/[^a-zA-Z0-9-_]/g, '');
@@ -878,6 +1029,11 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             if(!amt||amt<=0) return this.showToast('Monto inválido');
             const g = this.data.goals.find(x=>x.id===gid);
             if(g){ 
+                const saved = g.contributions?.reduce((s,c)=>s+c.amount,0)||0;
+                if(saved + amt > g.targetAmount) {
+                    this.showToast(`No puedes aportar más del objetivo. Máximo: ${this.formatMoney(g.targetAmount - saved)}`);
+                    return;
+                }
                 g.contributions=g.contributions||[]; 
                 g.contributions.push({date:new Date().toISOString().split('T')[0], amount:amt}); 
                 this.saveData(); 
@@ -937,177 +1093,194 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 
         exportCSV(){
             let csv='Fecha,Tipo,Categoria,Monto,Nota\n'; const all=[...this.data.transactions].sort((a,b)=>new Date(a.date)-new Date(b.date));
-            all.forEach(t=>{ csv+=`${t.date},${t.type},${t.categoryName||t.category},${t.amount},"${t.note||''}"\n`; });
+            all.forEach(t=>{ csv+=`${t.date},${t.type},${t.categoryName||t.category},${t.amount},"${(t.note||'').replace(/"/g,'""')}"\n`; });
             const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`fintrack_${new Date().toISOString().split('T')[0]}.csv`; a.click(); this.showToast('CSV descargado');
         },
         exportPDF(){
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            const metrics = this.calculateMetrics();
-            const periodLabel = this.data.customPeriod 
-                ? `${this.formatDate(this.data.customPeriod.start)} – ${this.formatDate(this.data.customPeriod.end)}`
-                : this.getPeriodLabel();
-            const pageWidth = doc.internal.pageSize.getWidth();
-            
-            const primaryColor = [34, 197, 94];
-            const darkColor = [15, 23, 42];
-            const lightGray = [241, 245, 249];
-            
-            doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-            doc.rect(0, 0, pageWidth, 40, 'F');
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(28);
-            doc.setFont('helvetica', 'bold');
-            doc.text('FinTrack', 15, 28);
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'normal');
-            doc.text('Informe Financiero Personal', 15, 40);
-            
-            doc.setTextColor(100, 116, 139);
-            doc.setFontSize(10);
-            doc.text(`Período: ${periodLabel}`, 15, 55);
-            doc.text(`Generado el ${new Date().toLocaleDateString('es-CL', {day:'numeric', month:'long', year:'numeric'})}`, 15, 62);
-            
-            doc.setDrawColor(200, 200, 200);
-            doc.line(15, 68, pageWidth-15, 68);
-            
-            doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-            doc.setFontSize(16);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Resumen Ejecutivo', 15, 82);
-            
-            const kpis = [
-                { label: 'Saldo actual', value: this.formatMoney(metrics.balance), color: metrics.balance>=0?primaryColor:[239,68,68] },
-                { label: 'Proyección', value: this.formatMoney(metrics.projected), color: metrics.projected>=0?primaryColor:[239,68,68] },
-                { label: 'Días de reserva', value: metrics.hasExpenseHistory?`${metrics.coverage} días`:'N/A', color: primaryColor },
-                { label: 'Ritmo mensual', value: metrics.hasExpenseHistory?this.formatMoney(metrics.monthlyPace):'N/A', color: primaryColor },
-                { label: 'Promedio diario', value: metrics.hasExpenseHistory?this.formatMoney(metrics.dailyAvg):'N/A', color: primaryColor }
-            ];
-            
-            let yPos = 92;
-            kpis.forEach((kpi, i) => {
-                const col = i % 2;
-                const x = 15 + col * 95;
-                if (col === 0 && i > 0) yPos += 25;
-                doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
-                doc.roundedRect(x, yPos, 85, 20, 3, 3, 'F');
+            try {
+                const { jsPDF } = window.jspdf;
+                if (!jsPDF) throw new Error('jsPDF no disponible');
+                const doc = new jsPDF();
+                const metrics = this.calculateMetrics();
+                const periodLabel = this.data.customPeriod 
+                    ? `${this.formatDate(this.data.customPeriod.start)} – ${this.formatDate(this.data.customPeriod.end)}`
+                    : this.getPeriodLabel();
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+                
+                const primaryColor = [34, 197, 94];
+                const darkColor = [15, 23, 42];
+                const lightGray = [241, 245, 249];
+                
+                doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+                doc.rect(0, 0, pageWidth, 40, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(28);
+                doc.setFont('helvetica', 'bold');
+                doc.text('FinTrack', 15, 28);
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'normal');
+                doc.text('Informe Financiero Personal', 15, 40);
+                
                 doc.setTextColor(100, 116, 139);
+                doc.setFontSize(10);
+                doc.text(`Periodo: ${periodLabel}`, 15, 55);
+                doc.text(`Generado el ${new Date().toLocaleDateString('es-CL', {day:'numeric', month:'long', year:'numeric'})}`, 15, 62);
+                
+                doc.setDrawColor(200, 200, 200);
+                doc.line(15, 68, pageWidth-15, 68);
+                
+                doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+                doc.setFontSize(16);
+                doc.setFont('helvetica', 'bold');
+                doc.text('Resumen Ejecutivo', 15, 82);
+                
+                const kpis = [
+                    { label: 'Saldo actual', value: this.formatMoney(metrics.balance), color: metrics.balance>=0?primaryColor:[239,68,68] },
+                    { label: 'Proyeccion', value: this.formatMoney(metrics.projected), color: metrics.projected>=0?primaryColor:[239,68,68] },
+                    { label: 'Dias de reserva', value: metrics.hasExpenseHistory?`${metrics.coverage} dias`:'N/A', color: primaryColor },
+                    { label: 'Ritmo mensual', value: metrics.hasExpenseHistory?this.formatMoney(metrics.monthlyPace):'N/A', color: primaryColor },
+                    { label: 'Promedio diario', value: metrics.hasExpenseHistory?this.formatMoney(metrics.dailyAvg):'N/A', color: primaryColor }
+                ];
+                
+                let yPos = 92;
+                kpis.forEach((kpi, i) => {
+                    const col = i % 2;
+                    const x = 15 + col * 95;
+                    if (col === 0 && i > 0) yPos += 25;
+                    doc.setFillColor(lightGray[0], lightGray[1], lightGray[2]);
+                    doc.rect(x, yPos, 85, 20, 'F');
+                    doc.setTextColor(100, 116, 139);
+                    doc.setFontSize(8);
+                    doc.text(kpi.label, x+5, yPos+8);
+                    doc.setTextColor(kpi.color[0], kpi.color[1], kpi.color[2]);
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(kpi.value, x+5, yPos+16);
+                });
+                
+                yPos += 30;
+                
+                const hasAutoTable = typeof doc.autoTable === 'function';
+                
+                if (Object.keys(metrics.catMap).length > 0) {
+                    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Gastos por Categoria', 15, yPos);
+                    yPos += 8;
+                    const catData = Object.entries(metrics.catMap).map(([name, amount]) => {
+                        const pct = ((amount / metrics.monthlySpent) * 100).toFixed(1);
+                        return [name, this.formatMoney(amount), `${pct}%`];
+                    });
+                    if (hasAutoTable) {
+                        doc.autoTable({
+                            startY: yPos,
+                            head: [['Categoria', 'Monto', '%']],
+                            body: catData,
+                            theme: 'striped',
+                            headStyles: { fillColor: primaryColor, textColor: 255 },
+                            margin: { left: 15, right: 15 }
+                        });
+                        yPos = doc.lastAutoTable.finalY + 10;
+                    }
+                }
+                
+                const periodTx = this.getTransactionsForPeriod();
+                if (periodTx.length > 0) {
+                    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Historial de Movimientos', 15, yPos);
+                    yPos += 8;
+                    const historyData = periodTx.map(t => [
+                        this.formatDate(t.date),
+                        t.categoryName || t.category,
+                        t.type === 'income' ? 'Ingreso' : 'Gasto',
+                        this.formatMoney(t.amount),
+                        t.note || ''
+                    ]);
+                    if (hasAutoTable) {
+                        doc.autoTable({
+                            startY: yPos,
+                            head: [['Fecha', 'Categoria', 'Tipo', 'Monto', 'Nota']],
+                            body: historyData,
+                            theme: 'striped',
+                            headStyles: { fillColor: primaryColor, textColor: 255 },
+                            margin: { left: 15, right: 15 }
+                        });
+                        yPos = doc.lastAutoTable.finalY + 10;
+                    }
+                }
+                
+                if (this.data.futureItems.length > 0) {
+                    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Compromisos Futuros', 15, yPos);
+                    yPos += 8;
+                    const futureData = this.data.futureItems.map(i => [
+                        this.formatDate(i.date),
+                        i.name,
+                        i.type === 'income' ? 'Ingreso' : 'Gasto',
+                        this.formatMoney(i.amount),
+                        i.recurrent ? 'Si' : 'No'
+                    ]);
+                    if (hasAutoTable) {
+                        doc.autoTable({
+                            startY: yPos,
+                            head: [['Fecha', 'Concepto', 'Tipo', 'Monto', 'Recurrente']],
+                            body: futureData,
+                            theme: 'striped',
+                            headStyles: { fillColor: [59, 130, 246] },
+                            margin: { left: 15, right: 15 }
+                        });
+                        yPos = doc.lastAutoTable.finalY + 10;
+                    }
+                }
+                
+                if (this.data.goals.length > 0) {
+                    doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Metas Activas', 15, yPos);
+                    yPos += 8;
+                    const goalsData = this.data.goals.map(g => {
+                        const saved = g.contributions?.reduce((s,c) => s + c.amount, 0) || 0;
+                        const pct = Math.min(100, (saved / g.targetAmount) * 100);
+                        return [g.name, this.formatMoney(saved), this.formatMoney(g.targetAmount), `${pct.toFixed(0)}%`];
+                    });
+                    if (hasAutoTable) {
+                        doc.autoTable({
+                            startY: yPos,
+                            head: [['Meta', 'Ahorrado', 'Objetivo', 'Progreso']],
+                            body: goalsData,
+                            theme: 'striped',
+                            headStyles: { fillColor: primaryColor, textColor: 255 },
+                            margin: { left: 15, right: 15 }
+                        });
+                    }
+                }
+                
                 doc.setFontSize(8);
-                doc.text(kpi.label, x+5, yPos+8);
-                doc.setTextColor(kpi.color[0], kpi.color[1], kpi.color[2]);
-                doc.setFontSize(12);
-                doc.setFont('helvetica', 'bold');
-                doc.text(kpi.value, x+5, yPos+16);
-            });
-            
-            yPos += 30;
-            
-            if (Object.keys(metrics.catMap).length > 0) {
-                doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.text('Gastos por Categoría', 15, yPos);
-                yPos += 8;
-                const catData = Object.entries(metrics.catMap).map(([name, amount]) => {
-                    const pct = ((amount / metrics.monthlySpent) * 100).toFixed(1);
-                    return [name, this.formatMoney(amount), `${pct}%`];
-                });
-                doc.autoTable({
-                    startY: yPos,
-                    head: [['Categoría', 'Monto', '%']],
-                    body: catData,
-                    theme: 'striped',
-                    headStyles: { fillColor: primaryColor, textColor: 255 },
-                    margin: { left: 15, right: 15 }
-                });
-                yPos = doc.lastAutoTable.finalY + 10;
+                doc.setTextColor(100, 116, 139);
+                doc.text('Este informe es generado automaticamente por FinTrack.', 15, pageHeight - 20);
+                doc.text('Los datos reflejan el periodo seleccionado.', 15, pageHeight - 15);
+                
+                doc.save(`FinTrack_Informe_${new Date().toISOString().split('T')[0]}.pdf`);
+                this.showToast('PDF generado exitosamente');
+            } catch(e) {
+                console.error(e);
+                this.showToast('Error al generar PDF. Asegúrate de tener conexión a internet.');
             }
-            
-            const periodTx = this.getTransactionsForPeriod();
-            if (periodTx.length > 0) {
-                doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.text('Historial de Movimientos', 15, yPos);
-                yPos += 8;
-                const historyData = periodTx.map(t => [
-                    this.formatDate(t.date),
-                    t.categoryName || t.category,
-                    t.type === 'income' ? 'Ingreso' : 'Gasto',
-                    this.formatMoney(t.amount),
-                    t.note || ''
-                ]);
-                doc.autoTable({
-                    startY: yPos,
-                    head: [['Fecha', 'Categoría', 'Tipo', 'Monto', 'Nota']],
-                    body: historyData,
-                    theme: 'striped',
-                    headStyles: { fillColor: primaryColor, textColor: 255 },
-                    margin: { left: 15, right: 15 }
-                });
-                yPos = doc.lastAutoTable.finalY + 10;
-            }
-            
-            if (this.data.futureItems.length > 0) {
-                doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.text('Compromisos Futuros', 15, yPos);
-                yPos += 8;
-                const futureData = this.data.futureItems.map(i => [
-                    this.formatDate(i.date),
-                    i.name,
-                    i.type === 'income' ? 'Ingreso' : 'Gasto',
-                    this.formatMoney(i.amount),
-                    i.recurrent ? 'Sí' : 'No'
-                ]);
-                doc.autoTable({
-                    startY: yPos,
-                    head: [['Fecha', 'Concepto', 'Tipo', 'Monto', 'Recurrente']],
-                    body: futureData,
-                    theme: 'striped',
-                    headStyles: { fillColor: [59, 130, 246] },
-                    margin: { left: 15, right: 15 }
-                });
-                yPos = doc.lastAutoTable.finalY + 10;
-            }
-            
-            if (this.data.goals.length > 0) {
-                doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.text('Metas Activas', 15, yPos);
-                yPos += 8;
-                const goalsData = this.data.goals.map(g => {
-                    const saved = g.contributions?.reduce((s,c) => s + c.amount, 0) || 0;
-                    const pct = Math.min(100, (saved / g.targetAmount) * 100);
-                    return [g.name, this.formatMoney(saved), this.formatMoney(g.targetAmount), `${pct.toFixed(0)}%`];
-                });
-                doc.autoTable({
-                    startY: yPos,
-                    head: [['Meta', 'Ahorrado', 'Objetivo', 'Progreso']],
-                    body: goalsData,
-                    theme: 'striped',
-                    headStyles: { fillColor: primaryColor, textColor: 255 },
-                    margin: { left: 15, right: 15 }
-                });
-            }
-            
-            doc.setFontSize(8);
-            doc.setTextColor(100, 116, 139);
-            doc.text('Este informe es generado automáticamente por FinTrack.', 15, pageWidth-20);
-            doc.text('Los datos reflejan el período seleccionado y no constituyen asesoría financiera.', 15, pageWidth-15);
-            
-            doc.save(`FinTrack_Informe_${new Date().toISOString().split('T')[0]}.pdf`);
-            this.showToast('PDF generado exitosamente');
         },
         toggleTheme(){ const h=document.documentElement; const d=h.classList.toggle('dark'); this.data.settings.theme=d?'dark':'light'; this.saveData(); },
         applyTheme(){ if(this.data.settings.theme==='dark') document.documentElement.classList.add('dark'); },
         showToast(m){ const t=document.getElementById('toast'); document.getElementById('toast-msg').textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); },
         requestClearAllData(){
-            this.showConfirmModal('Eliminar todos los datos', 'Esta acción es irreversible. Escribe BORRAR para confirmar.', true, ()=>{
-                localStorage.clear(); // Limpia todo el localStorage
-                window.location.reload(true);
+            this.showConfirmModal('Eliminar todos los datos', 'Esta accion es irreversible. Escribe BORRAR para confirmar.', true, ()=>{
+                localStorage.clear();
+                window.location.reload();
             });
         }
     };
