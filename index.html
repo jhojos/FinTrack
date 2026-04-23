@@ -80,7 +80,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .dark .bg-brand-100 { background-color: rgba(34, 197, 94, 0.2); }
 .bg-danger-100 { background-color: #fee2e2; }
 .dark .bg-danger-100 { background-color: rgba(239, 68, 68, 0.2); }
-.toast { position: absolute; top: 16px; left: 99%; transform: translateX(-50%) translateY(-150%); background: #0f172a; color: white; padding: 12px 20px; border-radius: 50px; font-size: 14px; font-weight: 500; z-index: 100; transition: transform 0.3s ease; display: flex; align-items: center; gap: 8px; white-space: nowrap; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.toast { position: absolute; top: 16px; left: 50%; transform: translateX(-50%) translateY(-150%); background: #0f172a; color: white; padding: 12px 20px; border-radius: 50px; font-size: 14px; font-weight: 500; z-index: 100; transition: transform 0.3s ease; display: flex; align-items: center; gap: 8px; white-space: nowrap; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
 .toast.show { transform: translateX(-50%) translateY(0); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .animate-fade-in { animation: fadeIn 0.3s ease-out; }
@@ -498,6 +498,69 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             return [...cats].sort((a,b) => (counts[b.id]||0) - (counts[a.id]||0));
         },
 
+        // ========== MEJORA 1: CATEGORIZACIÓN INTELIGENTE POR FRECUENCIA ==========
+        autoCategorize(txt){
+            const map = { uber:'transport', didi:'transport', comida:'food', super:'food', arriendo:'housing', sueldo:'income' };
+            const sel = document.getElementById('t-category');
+            if (!sel) return;
+            
+            // 1. Palabras clave
+            for(const [k,v] of Object.entries(map)) {
+                if(txt.toLowerCase().includes(k) && sel.querySelector(`option[value="${v}"]`)) {
+                    sel.value = v;
+                    return;
+                }
+            }
+            
+            // 2. Frecuencia histórica
+            if (txt.trim().length > 0) {
+                const similarNotes = this.data.transactions
+                    .filter(t => t.note && t.note.toLowerCase().includes(txt.toLowerCase().substring(0, 2)))
+                    .slice(-10);
+                
+                if (similarNotes.length > 0) {
+                    const freq = {};
+                    similarNotes.forEach(t => {
+                        freq[t.category] = (freq[t.category] || 0) + 1;
+                    });
+                    const bestCat = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+                    if (bestCat && sel.querySelector(`option[value="${bestCat[0]}"]`)) {
+                        sel.value = bestCat[0];
+                    }
+                }
+            }
+        },
+
+        // ========== MEJORA 2: TIPS PERSONALIZADOS ==========
+        getSmartTip() {
+            const periodTx = this.getTransactionsForPeriod();
+            const metrics = this.calculateMetrics();
+            const activeGoals = this.data.goals.length;
+            
+            // Tip según contexto
+            if (metrics.hasExpenseHistory && metrics.spentPercent > 80 && metrics.spentPercent < 100) {
+                return { icon: '📊', text: `Ya llevas gastado el ${metrics.spentPercent.toFixed(0)}% de tu ritmo mensual. ¡Vas bien, mantén el control!`, color: 'text-brand-600' };
+            }
+            
+            const nearGoal = this.data.goals.find(g => {
+                const saved = g.contributions?.reduce((s, c) => s + c.amount, 0) || 0;
+                return (saved / g.targetAmount) >= 0.8 && (saved / g.targetAmount) < 1;
+            });
+            if (nearGoal) {
+                return { icon: '🎯', text: `¡Estás muy cerca de cumplir tu meta "${nearGoal.name}"! Solo te falta un poco más.`, color: 'text-brand-600' };
+            }
+            
+            if (activeGoals === 0 && periodTx.length >= 3) {
+                return { icon: '💡', text: 'Crear una meta de ahorro te ayuda a mantener el foco. ¿Quieres intentarlo? Toca en Metas.', color: 'text-pro-600' };
+            }
+            
+            if (metrics.balance < 0 && periodTx.length > 0) {
+                return { icon: '⚠️', text: 'Tu saldo está en rojo este período. Revisa tus gastos variables.', color: 'text-danger-600' };
+            }
+            
+            return null;
+        },
+
         renderHome(container){
             const periodTx = this.getTransactionsForPeriod();
             const income = periodTx.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
@@ -507,6 +570,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             const recent = periodTx.slice(-3).reverse();
             const metrics = this.calculateMetrics();
             const userName = this.data.user.name || '';
+            const smartTip = this.getSmartTip();
 
             if(!hasData){
                 container.innerHTML = `
@@ -552,7 +616,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 </div>
             </div>` : '';
 
-            // Sección de metas activas (hasta 2)
             const activeGoals = this.data.goals.slice(0, 2);
             const goalsHTML = activeGoals.length > 0 ? `
             <div class="card">
@@ -582,6 +645,14 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 </div>
             </div>` : '';
 
+            const tipHTML = smartTip ? `
+            <div class="card bg-slate-50 dark:bg-slate-800 border-dashed border-brand-600">
+                <div class="flex items-start gap-3">
+                    <span class="text-lg mt-0.5">${smartTip.icon}</span>
+                    <p class="text-sm ${smartTip.color}">${smartTip.text}</p>
+                </div>
+            </div>` : '';
+
             const expenseTx = periodTx.filter(t=>t.type==='expense');
             const expenseDays = new Set(expenseTx.map(t=>t.date)).size;
             const hasEnoughExpenseDays = expenseDays >= 3;
@@ -606,6 +677,7 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
                 </div>
                 ${pieChartHTML}
                 ${goalsHTML}
+                ${tipHTML}
                 <div class="card">
                     <div class="flex justify-between mb-3">
                         <h3 class="font-bold text-sm">Últimos movimientos</h3>
@@ -973,11 +1045,6 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
             cont.innerHTML = top.length? top.map(([n])=>`<button type="button" onclick="app.fillNote('${n.replace(/'/g,"\\'")}')" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-full text-xs">${escapeHtml(n)}</button>`).join('') : '';
         },
         fillNote(n){ document.getElementById('t-note').value=n; this.autoCategorize(n); },
-        autoCategorize(txt){
-            const map={ uber:'transport', didi:'transport', comida:'food', super:'food', arriendo:'housing', sueldo:'income' };
-            const sel=document.getElementById('t-category');
-            for(const [k,v] of Object.entries(map)) if(txt.toLowerCase().includes(k) && sel.querySelector(`option[value="${v}"]`)) { sel.value=v; break; }
-        },
         saveTransaction(e){
             e.preventDefault();
             const amt=parseFloat(document.getElementById('t-amount').value), cat=document.getElementById('t-category').value, date=document.getElementById('t-date').value, note=document.getElementById('t-note').value;
